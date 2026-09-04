@@ -26,7 +26,8 @@ def test_openrouter_key_setting():
 
 
 def test_missing_openrouter_key_service_raises():
-    svc = OpenRouterService(Settings(deepseek_api_key="dk"))  # no OR key
+    # force an empty OR key (env may contain a real one)
+    svc = OpenRouterService(Settings(deepseek_api_key="dk", openrouter_api_key=""))
     req = OpenRouterRunRequest(message="x", model=DEFAULT_MODELS["weak"])
     with pytest.raises(OpenRouterError) as e:
         asyncio.run(svc.run(req))
@@ -156,11 +157,12 @@ def test_actual_model_returned_and_usage_propagated(monkeypatch):
     assert resp.finish_reason == "stop"
 
 
-def test_missing_cost_handled_safely(monkeypatch):
+def test_cost_estimated_when_provider_missing_but_pricing_known(monkeypatch):
     svc, _, _ = make_service(monkeypatch, [_completion("Ответ", usage=_usage(cost=None))])
     resp = asyncio.run(svc.run(_req()))
-    # no pricing in allowlist -> cost stays None rather than fabricated
-    assert resp.cost is None
+    # provider did not return cost, but weak model pricing is known -> estimate
+    assert resp.cost == pytest.approx((50 * 0.10 + 80 * 0.20) / 1_000_000.0)
+    assert resp.cost_estimated is True
     assert resp.usage == {"prompt_tokens": 50, "completion_tokens": 80, "total_tokens": 130}
 
 
@@ -231,3 +233,12 @@ def test_api_validation_zero_provider_calls(or_app):
     for p in bads:
         c.post("/api/openrouter/run", json=p)
     assert len(fake.calls) == 0
+
+
+def test_strong_default_is_current_sonnet():
+    from app.or_models import MODEL_ALLOWLIST
+    strong = next(e for e in MODEL_ALLOWLIST if e["category"] == "strong")
+    assert strong["id"] == "anthropic/claude-sonnet-4.6"
+    assert "claude-3.5-sonnet" not in {e["id"] for e in MODEL_ALLOWLIST}
+    assert strong["input_per_million"] == 3.0
+    assert strong["output_per_million"] == 15.0

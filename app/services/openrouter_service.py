@@ -89,8 +89,16 @@ class OpenRouterService:
             logger.warning("OpenRouter connection error")
             raise OpenRouterError("Не удалось подключиться к OpenRouter.", 502)
         except APIError as exc:
-            logger.warning("OpenRouter API error status=%s", getattr(exc, "status_code", "?"))
-            raise OpenRouterError("OpenRouter вернул ошибку.", getattr(exc, "status_code", 502))
+            status = getattr(exc, "status_code", 502)
+            logger.warning("OpenRouter API error status=%s", status)
+            if status == 404:
+                raise OpenRouterError(
+                    "Выбранная модель недоступна через OpenRouter (модель не найдена).",
+                    404,
+                )
+            raise OpenRouterError(
+                f"OpenRouter вернул ошибку (HTTP {status}).", status
+            )
         except Exception as exc:  # pragma: no cover - defensive
             logger.exception("OpenRouter unexpected error")
             raise OpenRouterError("Непредвиденная ошибка OpenRouter.", 500) from exc
