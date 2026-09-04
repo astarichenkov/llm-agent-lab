@@ -10,6 +10,9 @@ from app.schemas.chat import ChatRequest, ChatResponse, ErrorResponse
 from app.schemas.compare import CompareRequest, CompareResponse
 from app.schemas.reasoning import ReasoningRequest, ReasoningResponse
 from app.schemas.temperature import TemperatureRequest, TemperatureResponse
+from app.schemas.day5 import OpenRouterRunRequest, OpenRouterRunResponse
+from app.services.openrouter_service import OpenRouterError, OpenRouterService
+from app.or_models import models_for_ui, DEFAULT_MODELS
 from app.services.deepseek import DeepSeekError, DeepSeekService
 
 router = APIRouter()
@@ -33,6 +36,13 @@ def get_deepseek_service(
 ) -> DeepSeekService:
     """Dependency factory. Tests override this to inject a mock service."""
     return DeepSeekService(settings)
+
+
+def get_openrouter_service(
+    settings: Settings = Depends(get_settings),
+) -> OpenRouterService:
+    """Day 5 only. Tests override this to inject a mock service."""
+    return OpenRouterService(settings)
 
 
 @router.get("/", response_class=HTMLResponse, include_in_schema=False)
@@ -125,4 +135,26 @@ async def temperature_run(
     try:
         return await service.complete_with_temperature(payload)
     except DeepSeekError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+
+
+@router.get("/api/openrouter/models")
+async def openrouter_models() -> dict:
+    """Safe, curated OpenRouter model metadata (no secrets, no client key)."""
+    return {"defaults": DEFAULT_MODELS, "models": models_for_ui()}
+
+
+@router.post(
+    "/api/openrouter/run",
+    response_model=OpenRouterRunResponse,
+    responses=_PROVIDER_ERROR_RESPONSES,
+)
+async def openrouter_run(
+    payload: OpenRouterRunRequest,
+    service: OpenRouterService = Depends(get_openrouter_service),
+) -> OpenRouterRunResponse:
+    """Day 5: run ONE model via OpenRouter. One request = one provider call."""
+    try:
+        return await service.run(payload)
+    except OpenRouterError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc

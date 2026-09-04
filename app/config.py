@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     deepseek_model: str = "deepseek-v4-flash"
     deepseek_timeout_seconds: float = 30.0
 
+    # OpenRouter (Day 5 model comparison) — used ONLY for Day 5.
+    openrouter_api_key: str = ""
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    openrouter_timeout_seconds: float = 90.0
+
     system_prompt: str = (
         "You are a helpful educational assistant. "
         "Explain concepts clearly, concisely and accurately."

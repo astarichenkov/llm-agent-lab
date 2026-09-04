@@ -422,3 +422,11 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 @media (max-width: 720px) {
   .d4-controls, .rating-grid { grid-template-columns: 1fr; }
 }
+
+/* ---------------- Day 5 ---------------- */
+#panel-day5 { display: none; }
+#panel-day5.active { display: block; }
+.day5-panel select {
+  width: 100%; padding: 0.55rem 0.7rem; font: inherit; color: var(--text);
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+}

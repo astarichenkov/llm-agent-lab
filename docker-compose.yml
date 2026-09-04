@@ -12,6 +12,8 @@ services:
       DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-v4-flash}
       DEEPSEEK_TIMEOUT_SECONDS: ${DEEPSEEK_TIMEOUT_SECONDS:-30}
       ENVIRONMENT: ${ENVIRONMENT:-production}
+      # Day 5 (OpenRouter model comparison) — optional, separate from DeepSeek.
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
     expose:
       - "8000"
     volumes:

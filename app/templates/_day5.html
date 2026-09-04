@@ -1,0 +1,131 @@
+<main class="container day5-panel" id="panel-day5">
+  <h1>День 5 — Версии моделей</h1>
+  <p class="subtitle">Один и тот же запрос на слабой, средней и сильной моделях</p>
+  <p class="field-hint">
+    В этом эксперименте один и тот же запрос отправляется разным моделям через
+    OpenRouter. Сравниваются качество, скорость, количество токенов и стоимость.
+  </p>
+
+  <div class="field">
+    <div class="field-label-row"><label for="d5-task">Один и тот же запрос для всех моделей</label></div>
+    <textarea id="d5-task" rows="5" maxlength="4000">Объясни простыми словами, почему бинарный поиск работает быстрее линейного поиска на большом отсортированном массиве. Приведи короткий пример.</textarea>
+    <p class="field-hint">Этот текст отправляется без изменений всем выбранным моделям.</p>
+  </div>
+
+  <div class="preview-panel">
+    <div class="d4-controls">
+      <div class="field">
+        <label for="d5-max">max_tokens</label>
+        <input type="number" id="d5-max" min="16" max="2000" value="500">
+      </div>
+      <div class="field">
+        <label for="d5-temp">temperature</label>
+        <input type="number" id="d5-temp" min="0" max="2" step="0.1" value="0.3">
+      </div>
+      <div class="field">
+        <label for="d5-stop">stop sequence</label>
+        <input type="text" id="d5-stop" maxlength="50" value="" placeholder="необязательно">
+      </div>
+    </div>
+    <p class="cost-note">Один запрос = 1 платный API-запрос. Сравнение всех трёх моделей = 3 запроса.</p>
+  </div>
+
+  <nav class="tabbar d4-subbar" aria-label="Модели">
+    <button type="button" class="tab-btn active" id="d5-sub-weak" data-sub="weak">Слабая модель</button>
+    <button type="button" class="tab-btn" id="d5-sub-medium" data-sub="medium">Средняя модель</button>
+    <button type="button" class="tab-btn" id="d5-sub-strong" data-sub="strong">Сильная модель</button>
+    <button type="button" class="tab-btn" id="d5-sub-out" data-sub="out">Мой вывод</button>
+  </nav>
+
+  <!-- per-slot panels -->
+  <section class="d4-sub" id="d5-panel-weak">
+    <h2>Слабая модель</h2>
+    <div class="field"><label for="d5-weak-model">Модель</label>
+      <select id="d5-weak-model"></select>
+      <p class="field-hint" id="d5-weak-meta">Цена и контекст: загрузка…</p>
+    </div>
+    <button type="button" class="primary-btn" id="d5-weak-send">Отправить</button>
+    <span class="loading hidden" id="d5-weak-loading">Запрос к OpenRouter…</span>
+    <p id="d5-weak-error" class="error hidden"></p>
+    <div id="d5-weak-metrics" class="finish-row"></div>
+    <h3 class="applied-heading">Ответ</h3>
+    <div id="d5-weak-answer" class="answer"></div>
+  </section>
+
+  <section class="d4-sub hidden" id="d5-panel-medium">
+    <h2>Средняя модель</h2>
+    <div class="field"><label for="d5-medium-model">Модель</label>
+      <select id="d5-medium-model"></select>
+      <p class="field-hint" id="d5-medium-meta">Цена и контекст: загрузка…</p>
+    </div>
+    <button type="button" class="primary-btn" id="d5-medium-send">Отправить</button>
+    <span class="loading hidden" id="d5-medium-loading">Запрос к OpenRouter…</span>
+    <p id="d5-medium-error" class="error hidden"></p>
+    <div id="d5-medium-metrics" class="finish-row"></div>
+    <h3 class="applied-heading">Ответ</h3>
+    <div id="d5-medium-answer" class="answer"></div>
+  </section>
+
+  <section class="d4-sub hidden" id="d5-panel-strong">
+    <h2>Сильная модель</h2>
+    <div class="field"><label for="d5-strong-model">Модель</label>
+      <select id="d5-strong-model"></select>
+      <p class="field-hint" id="d5-strong-meta">Цена и контекст: загрузка…</p>
+    </div>
+    <button type="button" class="primary-btn" id="d5-strong-send">Отправить</button>
+    <span class="loading hidden" id="d5-strong-loading">Запрос к OpenRouter…</span>
+    <p id="d5-strong-error" class="error hidden"></p>
+    <div id="d5-strong-metrics" class="finish-row"></div>
+    <h3 class="applied-heading">Ответ</h3>
+    <div id="d5-strong-answer" class="answer"></div>
+  </section>
+
+  <!-- My conclusion -->
+  <section class="d4-sub hidden" id="d5-panel-out">
+    <h2>Мой вывод</h2>
+    <h3 class="applied-heading">Сравнение результатов</h3>
+    <p id="d5-fair" class="field-hint"></p>
+    <table class="compare-table">
+      <thead><tr><th>Уровень</th><th>Модель</th><th>Время (мс)</th><th>Prompt</th><th>Completion</th><th>Total</th><th>Стоимость</th><th>finish_reason</th></tr></thead>
+      <tbody id="d5-compare-tbody"></tbody>
+    </table>
+    <p class="cost-note">Выполнить все три модели = 3 платных запроса к OpenRouter.</p>
+    <button type="button" class="primary-btn" id="d5-run-all">Сравнить все 3 модели</button>
+    <span class="loading hidden" id="d5-runall-loading">Выполняются 3 платных запроса…</span>
+
+    <div id="d5-answers"></div>
+
+    <h3 class="applied-heading">Субъективные оценки (1–5)</h3>
+    <div class="rating-grid" id="d5-ratings">
+    <div class="rating-box" data-rating="weak">
+      <h4>Слабая модель</h4>
+      <div class="rating-row"><label for="d5-r-weak-qual">Качество:</label><select id="d5-r-weak-qual"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></div>
+      <div class="rating-row"><label for="d5-r-weak-acc">Точность:</label><select id="d5-r-weak-acc"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></div>
+      <div class="rating-row"><label for="d5-r-weak-util">Полезность/полнота:</label><select id="d5-r-weak-util"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></div>
+      <textarea id="d5-r-weak-comment" rows="2" style="width:100%" placeholder="Комментарий"></textarea>
+    </div>
+    <div class="rating-box" data-rating="medium">
+      <h4>Средняя модель</h4>
+      <div class="rating-row"><label for="d5-r-medium-qual">Качество:</label><select id="d5-r-medium-qual"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></div>
+      <div class="rating-row"><label for="d5-r-medium-acc">Точность:</label><select id="d5-r-medium-acc"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></div>
+      <div class="rating-row"><label for="d5-r-medium-util">Полезность/полнота:</label><select id="d5-r-medium-util"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></div>
+      <textarea id="d5-r-medium-comment" rows="2" style="width:100%" placeholder="Комментарий"></textarea>
+    </div>
+    <div class="rating-box" data-rating="strong">
+      <h4>Сильная модель</h4>
+      <div class="rating-row"><label for="d5-r-strong-qual">Качество:</label><select id="d5-r-strong-qual"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></div>
+      <div class="rating-row"><label for="d5-r-strong-acc">Точность:</label><select id="d5-r-strong-acc"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></div>
+      <div class="rating-row"><label for="d5-r-strong-util">Полезность/полнота:</label><select id="d5-r-strong-util"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></div>
+      <textarea id="d5-r-strong-comment" rows="2" style="width:100%" placeholder="Комментарий"></textarea>
+    </div>
+    </div>
+
+    <h3 class="applied-heading">Ссылки на модели</h3>
+    <div id="d5-links"></div>
+
+    <div class="field">
+      <div class="field-label-row"><label for="d5-conclusion">Итоговый вывод</label></div>
+      <textarea id="d5-conclusion" rows="4" placeholder="Слабая модель оказалась…, средняя…, сильная…"></textarea>
+    </div>
+  </section>
+</main>

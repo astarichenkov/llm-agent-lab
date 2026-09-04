@@ -185,3 +185,45 @@ def test_day4_js_dom_references_exist(client):
     present = set(re.findall(r'id="([^"]+)"', client.get("/").text))
     missing = sorted(referenced - present)
     assert not missing, f"day4.js references missing ids: {missing}"
+
+
+def test_homepage_has_day5_tab(client):
+    html = client.get("/").text
+    assert 'id="tab-day5"' in html
+    assert 'id="panel-day5"' in html
+    assert "День 5 — Версии моделей" in html
+    assert 'src="/static/js/day5.js"' in html
+    # previous day tabs remain
+    for t in ("tab-day2", "tab-day3", "tab-day4"):
+        assert f'id="{t}"' in html
+
+
+def test_day5_structure(client):
+    html = client.get("/").text
+    assert html.count("бинарный поиск работает быстрее линейного") == 1
+    for sub in ("d5-sub-weak", "d5-sub-medium", "d5-sub-strong", "d5-sub-out"):
+        assert f'id="{sub}"' in html
+    for k in ("weak", "medium", "strong"):
+        assert f'id="d5-{k}-model"' in html
+        assert f'id="d5-{k}-metrics"' in html
+        assert f'id="d5-{k}-answer"' in html
+        for r in ("qual", "acc", "util"):
+            assert f'id="d5-r-{k}-{r}"' in html
+    assert 'id="d5-fair"' in html
+    assert 'id="d5-compare-tbody"' in html
+    assert 'id="d5-links"' in html
+    assert 'id="d5-conclusion"' in html
+    assert 'id="d5-run-all"' in html
+
+
+def test_day5_js_dom_references_exist(client):
+    import re
+    from pathlib import Path
+
+    base = Path(__file__).resolve().parents[1] / "app" / "static" / "js"
+    referenced = set()
+    for name in ("app.js", "day3.js", "day4.js", "day5.js"):
+        referenced |= set(re.findall(r'getElementById\("([^"]+)"\)', (base / name).read_text(encoding="utf-8")))
+    present = set(re.findall(r'id="([^"]+)"', client.get("/").text))
+    missing = sorted(referenced - present)
+    assert not missing, f"referenced missing ids: {missing}"
