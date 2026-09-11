@@ -6,4 +6,4 @@ def test_health_returns_ok(client):
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ok"
-    assert body["application"] == "deepseek-study-app"
+    assert body["application"] == "llm-agent-lab"

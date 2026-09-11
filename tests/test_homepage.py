@@ -227,3 +227,78 @@ def test_day5_js_dom_references_exist(client):
     present = set(re.findall(r'id="([^"]+)"', client.get("/").text))
     missing = sorted(referenced - present)
     assert not missing, f"referenced missing ids: {missing}"
+
+
+def test_homepage_has_day7_tab(client):
+    html = client.get("/").text
+    assert 'id="tab-day7"' in html
+    assert 'id="panel-day7"' in html
+    assert "День 7 — Сохранение контекста" in html
+    assert 'src="/static/js/day7.js"' in html
+    # all previous day tabs remain
+    for t in ("tab-day2", "tab-day3", "tab-day4", "tab-day5", "tab-day6"):
+        assert f'id="{t}"' in html
+
+
+def test_homepage_has_day6_tab(client):
+    html = client.get("/").text
+    assert 'id="tab-day6"' in html
+    assert 'id="panel-day6"' in html
+    assert "День 6 — Первый агент" in html
+    assert 'src="/static/js/day6.js"' in html
+    # tab order: Day 6 before Day 7
+    assert html.index('id="tab-day6"') < html.index('id="tab-day7"')
+
+
+def test_day6_structure(client):
+    html = client.get("/").text
+    for el in (
+        "d6-agent-name", "d6-agent-provider", "d6-agent-model",
+        "d6-agent-max-tokens", "d6-agent-thinking",
+        "d6-input", "d6-send", "d6-loading", "d6-error",
+        "d6-answer", "d6-meta",
+    ):
+        assert f'id="{el}"' in html, f"missing Day6 id {el}"
+    # stateless message must be visible to the student
+    assert "Контекст между" in html
+
+
+def test_day6_js_dom_references_exist(client):
+    import re
+    from pathlib import Path
+
+    base = Path(__file__).resolve().parents[1] / "app" / "static" / "js"
+    referenced = set(re.findall(
+        r'\$\("([^"]+)"\)',
+        (base / "day6.js").read_text(encoding="utf-8"),
+    ))
+    assert referenced
+    present = set(re.findall(r'id="([^"]+)"', client.get("/").text))
+    missing = sorted(referenced - present)
+    assert not missing, f"day6.js references missing ids: {missing}"
+
+
+def test_day7_structure(client):
+    html = client.get("/").text
+    for el in (
+        "d7-agent-name", "d7-agent-provider", "d7-agent-model",
+        "d7-agent-max-tokens", "d7-agent-thinking",
+        "d7-context-count", "d7-messages", "d7-input", "d7-send",
+        "d7-clear", "d7-loading", "d7-error",
+    ):
+        assert f'id="{el}"' in html, f"missing Day7 id {el}"
+
+
+def test_day7_js_dom_references_exist(client):
+    import re
+    from pathlib import Path
+
+    base = Path(__file__).resolve().parents[1] / "app" / "static" / "js"
+    referenced = set(re.findall(
+        r'\$\("([^"]+)"\)',
+        (base / "day7.js").read_text(encoding="utf-8"),
+    ))
+    assert referenced
+    present = set(re.findall(r'id="([^"]+)"', client.get("/").text))
+    missing = sorted(referenced - present)
+    assert not missing, f"day7.js references missing ids: {missing}"

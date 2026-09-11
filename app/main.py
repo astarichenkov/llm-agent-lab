@@ -9,6 +9,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.agents.manager import AgentManager
 from app.api.routes import router
 from app.config import Settings, get_settings
 
@@ -70,11 +71,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         title=resolved.app_name,
         description=(
             "Educational web application demonstrating REST API integration "
-            "with the DeepSeek LLM cloud API."
+            "with cloud LLM APIs and persistent, multi-agent dialog context."
         ),
         version="1.0.0",
     )
     app.state.settings = resolved
+    app.state.agent_manager = AgentManager.for_settings(resolved)
 
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
     app.include_router(router)

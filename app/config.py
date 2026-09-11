@@ -29,7 +29,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    app_name: str = "DeepSeek Study Assistant"
+    app_name: str = "LLM Agent Lab"
     environment: str = "development"
 
     # DeepSeek / OpenAI-compatible client settings
@@ -42,6 +42,14 @@ class Settings(BaseSettings):
     openrouter_api_key: str = ""
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     openrouter_timeout_seconds: float = 90.0
+    # Default OpenRouter model used when an Agent selects provider="openrouter".
+    openrouter_model: str = "openai/gpt-4o-mini"
+
+    # Day 7 — persistent Agent context (SQLite). Relative paths resolve from
+    # the process working directory; in Docker ``./data`` is bind-mounted so
+    # the database survives restarts and container recreation.
+    agent_db_path: str = "data/agents.db"
+    agent_default_provider: str = "deepseek"
 
     system_prompt: str = (
         "You are a helpful educational assistant. "

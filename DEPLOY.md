@@ -1,6 +1,6 @@
 # Deployment Guide — clean Ubuntu VPS (Docker Compose)
 
-This guide deploys the DeepSeek Study App to a fresh Ubuntu server using
+This guide deploys the LLM Agent Lab to a fresh Ubuntu server using
 Docker and Docker Compose. Target architecture:
 
 ```
@@ -57,8 +57,8 @@ docker compose version   # expect: Docker Compose version v2.x
 ## 3. Clone the repository
 
 ```bash
-git clone <your-repository-url> deepseek-study-app
-cd deepseek-study-app
+git clone <your-repository-url> llm-agent-lab
+cd llm-agent-lab
 ```
 
 ## 4. Set the DEEPSEEK_API_KEY securely
@@ -164,11 +164,28 @@ fine for reading them with `sudo`/`cat`). The application falls back to
 stdout-only if the log file cannot be written, so the app never fails due
 to logging.
 
+### Persistent Agent context (Day 7)
+
+The SQLite database with dialog history is bind-mounted from `./data` to
+`/app/data` (`AGENT_DB_PATH=data/agents.db`). It survives
+`docker compose restart` **and** container recreation. `./data` is
+git-ignored. Back it up like any file:
+
+```bash
+cp data/agents.db data/agents.db.bak
+```
+
+To reset all agent context, remove the file while the app is stopped:
+
+```bash
+docker compose stop app && rm -f data/agents.db && docker compose start app
+```
+
 ## 9. Test /health
 
 ```bash
 curl -s http://localhost/health
-# {"status":"ok","application":"deepseek-study-app"}
+# {"status":"ok","application":"llm-agent-lab"}
 ```
 
 `/health` is public. Everything else requires Basic Auth:
@@ -213,7 +230,7 @@ docker compose up -d            # start again
 ## 11. Updating the application
 
 ```bash
-cd deepseek-study-app
+cd llm-agent-lab
 git pull                        # pull the latest code
 docker compose up -d --build    # rebuild image + restart
 docker compose ps               # verify
@@ -227,14 +244,14 @@ curl -s http://localhost/health
 
   ```bash
   docker compose build
-  docker tag deepseek-study-app:latest deepseek-study-app:release-2025-01-01
+  docker tag llm-agent-lab:latest llm-agent-lab:release-2025-01-01
   ```
 
   To roll back to a known-good tag:
 
   ```bash
   docker compose down
-  # edit docker-compose.yml: image: deepseek-study-app:release-2025-01-01
+  # edit docker-compose.yml: image: llm-agent-lab:release-2025-01-01
   docker compose up -d
   ```
 

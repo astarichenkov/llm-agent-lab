@@ -39,10 +39,92 @@ class OpenRouterService:
             base_url=settings.openrouter_base_url,
             timeout=settings.openrouter_timeout_seconds,
             default_headers={
-                "X-Title": "DeepSeek Study Project",
+                "X-Title": "LLM Agent Lab",
                 "HTTP-Referer": "https://openrouter.ai",
             },
         )
+
+    async def _create(self, params: dict):
+        """One Chat Completions call with uniform error classification."""
+        try:
+            return await self._client.chat.completions.create(**params)
+        except AuthenticationError:
+            logger.warning("OpenRouter auth error")
+            raise OpenRouterError(
+                "OpenRouter аутентификация не удалась. Проверьте OPENROUTER_API_KEY.", 401
+            )
+        except RateLimitError:
+            logger.warning("OpenRouter rate limit")
+            raise OpenRouterError("OpenRouter rate limit. Повторите позже.", 429)
+        except APITimeoutError:
+            logger.warning("OpenRouter timeout")
+            raise OpenRouterError("OpenRouter превысил время ожидания.", 504)
+        except APIConnectionError:
+            logger.warning("OpenRouter connection error")
+            raise OpenRouterError("Не удалось подключиться к OpenRouter.", 502)
+        except APIError as exc:
+            status = getattr(exc, "status_code", 502)
+            logger.warning("OpenRouter API error status=%s", status)
+            if status == 404:
+                raise OpenRouterError(
+                    "Выбранная модель недоступна через OpenRouter (модель не найдена).",
+                    404,
+                )
+            raise OpenRouterError(
+                f"OpenRouter вернул ошибку (HTTP {status}).", status
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.exception("OpenRouter unexpected error")
+            raise OpenRouterError("Непредвиденная ошибка OpenRouter.", 500) from exc
+
+    async def generate(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        model: str | None = None,
+        temperature: float = 0.7,
+        max_tokens: int = 1024,
+        stop: str | None = None,
+    ) -> tuple[str, str | None, dict | None]:
+        """Generic chat completion used by the persistent ``Agent`` layer.
+
+        Unlike :meth:`run` (Day 5, locked to the curated allowlist) this
+        accepts any ``model`` slug and forwards a full ``messages`` list, so an
+        Agent can own the conversation. Returns ``(content, finish_reason,
+        usage)``.
+        """
+        if not self._settings.openrouter_api_key:
+            raise OpenRouterError(
+                "OPENROUTER_API_KEY не задан. Добавьте ключ OpenRouter в .env / окружение.",
+                503,
+            )
+        chosen_model = model or self._settings.openrouter_model
+        params: dict = {
+            "model": chosen_model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+        }
+        if stop:
+            params["stop"] = [stop]
+        response = await self._create(params)
+        try:
+            choice = response.choices[0]
+            content = choice.message.content
+            finish_reason = choice.finish_reason
+        except (AttributeError, IndexError, TypeError):
+            raise OpenRouterError("OpenRouter вернул некорректный ответ.", 502)
+        if not content or not content.strip():
+            raise OpenRouterError("OpenRouter вернул пустой ответ.", 502)
+        usage = None
+        u = getattr(response, "usage", None)
+        if u is not None:
+            usage = {}
+            for k in ("prompt_tokens", "completion_tokens", "total_tokens"):
+                v = getattr(u, k, None)
+                if v is not None:
+                    usage[k] = v
+        return content.strip(), finish_reason, usage
 
     async def run(self, request: OpenRouterRunRequest) -> OpenRouterRunResponse:
         if not self._settings.openrouter_api_key:
@@ -72,36 +154,7 @@ class OpenRouterService:
         }
         if request.stop_sequence:
             params["stop"] = [request.stop_sequence]
-        try:
-            response = await self._client.chat.completions.create(**params)
-        except AuthenticationError:
-            logger.warning("OpenRouter auth error")
-            raise OpenRouterError(
-                "OpenRouter аутентификация не удалась. Проверьте OPENROUTER_API_KEY.", 401
-            )
-        except RateLimitError:
-            logger.warning("OpenRouter rate limit")
-            raise OpenRouterError("OpenRouter rate limit. Повторите позже.", 429)
-        except APITimeoutError:
-            logger.warning("OpenRouter timeout")
-            raise OpenRouterError("OpenRouter превысил время ожидания.", 504)
-        except APIConnectionError:
-            logger.warning("OpenRouter connection error")
-            raise OpenRouterError("Не удалось подключиться к OpenRouter.", 502)
-        except APIError as exc:
-            status = getattr(exc, "status_code", 502)
-            logger.warning("OpenRouter API error status=%s", status)
-            if status == 404:
-                raise OpenRouterError(
-                    "Выбранная модель недоступна через OpenRouter (модель не найдена).",
-                    404,
-                )
-            raise OpenRouterError(
-                f"OpenRouter вернул ошибку (HTTP {status}).", status
-            )
-        except Exception as exc:  # pragma: no cover - defensive
-            logger.exception("OpenRouter unexpected error")
-            raise OpenRouterError("Непредвиденная ошибка OpenRouter.", 500) from exc
+        response = await self._create(params)
         elapsed_ms = (time.perf_counter() - started) * 1000.0
 
         try:

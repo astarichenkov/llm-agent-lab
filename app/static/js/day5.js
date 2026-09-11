@@ -1,4 +1,4 @@
-/* DeepSeek Study App — Day 5: OpenRouter model comparison.
+/* LLM Agent Lab — Day 5: OpenRouter model comparison.
  * Vanilla JS. One Send = one POST /api/openrouter/run (one paid call).
  */
 (function () {
@@ -35,20 +35,7 @@
     function hideErr(el) { el.classList.add("hidden"); setText(el, ""); }
     function norm(s) { return String(s || "").replace(/\s+/g, " ").trim(); }
 
-    // main tabs (all)
-    function switchMain(name) {
-      var panels = { day2: "panel-day2", day3: "panel-day3", day4: "panel-day4", day5: "panel-day5" };
-      Object.keys(panels).forEach(function (k) { $(panels[k]).style.display = (k === name) ? "block" : "none"; });
-      var btns = { day2: "tab-day2", day3: "tab-day3", day4: "tab-day4", day5: "tab-day5" };
-      Object.keys(btns).forEach(function (k) {
-        var on = k === name;
-        $(btns[k]).classList.toggle("active", on);
-        $(btns[k]).setAttribute("aria-selected", on ? "true" : "false");
-      });
-    }
-    ["day2", "day3", "day4", "day5"].forEach(function (n) {
-      $("tab-" + n).addEventListener("click", function () { switchMain(n); });
-    });
+    // Main tab switching is centralized in app.js (initTabs / switchMainTab).
 
     // sub tabs
     function switchSub(name) {
@@ -244,7 +231,6 @@
       chain.finally(function () { btn.disabled = false; ld.classList.add("hidden"); });
     });
 
-    switchMain("day2");
     switchSub("weak");
   }
 

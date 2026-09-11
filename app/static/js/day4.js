@@ -1,4 +1,4 @@
-/* DeepSeek Study App — Day 4: temperature experiment.
+/* LLM Agent Lab — Day 4: temperature experiment.
  * Vanilla JS. One Send = one POST /api/temperature (one provider call).
  */
 (function () {
@@ -38,20 +38,7 @@
     function hideErr(el) { el.classList.add("hidden"); setText(el, ""); }
     function norm(s) { return String(s || "").replace(/\s+/g, " ").trim(); }
 
-    // ---------- Main tabs (covers day2/day3/day4) ----------
-    function switchMain(name) {
-      var map = [["panel-day2", "day2"], ["panel-day3", "day3"], ["panel-day4", "day4"]];
-      map.forEach(function (p) { $(p[0]).style.display = (p[1] === name) ? "block" : "none"; });
-      var btnMap = [["tab-day2", "day2"], ["tab-day3", "day3"], ["tab-day4", "day4"]];
-      btnMap.forEach(function (b) {
-        var on = b[1] === name;
-        $(b[0]).classList.toggle("active", on);
-        $(b[0]).setAttribute("aria-selected", on ? "true" : "false");
-      });
-    }
-    $("tab-day2").addEventListener("click", function () { switchMain("day2"); });
-    $("tab-day3").addEventListener("click", function () { switchMain("day3"); });
-    $("tab-day4").addEventListener("click", function () { switchMain("day4"); });
+    // Main tab switching is centralized in app.js (initTabs / switchMainTab).
 
     // ---------- Day4 sub-tabs ----------
     function switchSub(name) {
@@ -173,7 +160,6 @@
       setText($("d4-fair-indicator"), lines.join("\n"));
     }
 
-    switchMain("day2");
     switchSub("t0");
   }
 

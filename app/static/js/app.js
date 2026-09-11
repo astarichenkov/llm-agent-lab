@@ -1,4 +1,4 @@
-/* DeepSeek Study App — comparison frontend (управление ответом модели).
+/* LLM Agent Lab — comparison frontend (управление ответом модели).
  * Vanilla JavaScript (no framework). Talks to POST /api/compare.
  *
  * One click = exactly ONE /api/compare request; the backend performs
@@ -6,6 +6,44 @@
  */
 (function () {
   "use strict";
+
+  // ------------------------------------------------------------------
+  // Global main-tab controller (Days 2–7).
+  // Centralized in app.js so every day panel is switched by ONE piece of
+  // logic; no day-specific script can make another day unreachable. It also
+  // emits a ``llmtabchange`` event so a tab can lazily load its data.
+  // ------------------------------------------------------------------
+  var MAIN_TABS = ["day2", "day3", "day4", "day5", "day6", "day7"];
+
+  function switchMainTab(name) {
+    if (MAIN_TABS.indexOf(name) === -1) return;
+    MAIN_TABS.forEach(function (tab) {
+      var panel = document.getElementById("panel-" + tab);
+      if (panel) panel.style.display = (tab === name) ? "block" : "none";
+      var btn = document.getElementById("tab-" + tab);
+      if (btn) {
+        var on = tab === name;
+        btn.classList.toggle("active", on);
+        btn.setAttribute("aria-selected", on ? "true" : "false");
+      }
+    });
+    try {
+      document.dispatchEvent(
+        new CustomEvent("llmtabchange", { detail: { tab: name } })
+      );
+    } catch (err) {
+      /* very old browsers: tab switching still works without the event */
+    }
+  }
+
+  function initTabs() {
+    MAIN_TABS.forEach(function (tab) {
+      var btn = document.getElementById("tab-" + tab);
+      if (!btn) return;
+      btn.addEventListener("click", function () { switchMainTab(tab); });
+    });
+    switchMainTab("day2");
+  }
 
   function initApp() {
     var requiredIds = [
@@ -22,7 +60,7 @@
     });
     if (missing.length > 0) {
       console.error(
-        "DeepSeek Study App: missing DOM elements, frontend disabled:",
+        "LLM Agent Lab: missing DOM elements, frontend disabled:",
         missing.join(", ")
       );
       return;
@@ -331,9 +369,14 @@
   }
 
   // The script sits at the end of <body>; run safely even if moved to <head>.
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", initApp);
-  } else {
+  function boot() {
+    initTabs();
     initApp();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot);
+  } else {
+    boot();
   }
 })();

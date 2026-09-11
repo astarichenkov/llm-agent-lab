@@ -1,1 +1,1 @@
-"""DeepSeek Study App package."""
+"""LLM Agent Lab package."""

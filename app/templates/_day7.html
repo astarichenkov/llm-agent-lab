@@ -1,0 +1,64 @@
+<main class="container day7-panel" id="panel-day7">
+  <h1>День 7 — Сохранение контекста</h1>
+  <p class="subtitle">
+    Тот же Agent, что и в Дне 6, но теперь он хранит историю диалога в SQLite
+    и восстанавливает её после перезапуска.
+  </p>
+
+  <section class="agent-evolution" aria-label="Что умеет агент на этом этапе">
+    <span class="evo on">✓ отдельный класс Agent</span>
+    <span class="evo on">✓ собственный config</span>
+    <span class="evo on">✓ вызывает LLM API</span>
+    <span class="evo on">✓ хранит history</span>
+    <span class="evo on">✓ SQLite</span>
+    <span class="evo on">✓ restore после restart</span>
+  </section>
+
+  <section class="agent-info" aria-label="Информация об агенте">
+    <div class="agent-info-item">
+      <span class="agent-info-label">Агент</span>
+      <span class="agent-info-value" id="d7-agent-name">Default Agent</span>
+    </div>
+    <div class="agent-info-item">
+      <span class="agent-info-label">Провайдер</span>
+      <span class="agent-info-value" id="d7-agent-provider">—</span>
+    </div>
+    <div class="agent-info-item">
+      <span class="agent-info-label">Модель</span>
+      <span class="agent-info-value" id="d7-agent-model">—</span>
+    </div>
+    <div class="agent-info-item">
+      <span class="agent-info-label">Max output</span>
+      <span class="agent-info-value" id="d7-agent-max-tokens">—</span>
+    </div>
+    <div class="agent-info-item">
+      <span class="agent-info-label">Reasoning</span>
+      <span class="agent-info-value" id="d7-agent-thinking">—</span>
+    </div>
+    <div class="agent-info-item">
+      <span class="agent-info-label">Контекст</span>
+      <span class="agent-info-value" id="d7-context-count">0 сообщений</span>
+    </div>
+  </section>
+
+  <div id="d7-messages" class="chat-messages" aria-live="polite"></div>
+
+  <div class="field">
+    <div class="field-label-row">
+      <label for="d7-input">Сообщение</label>
+    </div>
+    <textarea id="d7-input" rows="3" maxlength="{{ max_message_length }}"
+      placeholder="Например: Запомни, кодовое слово — капибара."></textarea>
+    <p class="field-hint">
+      История хранится в SQLite (<code>data/agents.db</code>) и переживает
+      перезапуск приложения.
+    </p>
+  </div>
+
+  <div class="actions">
+    <button type="button" class="primary-btn" id="d7-send">Отправить</button>
+    <button type="button" class="link-btn" id="d7-clear">Очистить контекст</button>
+    <span class="loading hidden" id="d7-loading" role="status">Запрос к модели выполняется…</span>
+  </div>
+  <p id="d7-error" class="error hidden" role="alert"></p>
+</main>

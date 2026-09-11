@@ -1,4 +1,4 @@
-/* DeepSeek Study App — Day 3: reasoning-strategy comparison.
+/* LLM Agent Lab — Day 3: reasoning-strategy comparison.
  * Vanilla JavaScript. Talks to POST /api/reasoning (one provider call per
  * request; Method 3 uses two separate requests driven by the user).
  */
@@ -42,22 +42,7 @@
     }
     function statusClass(s) { return { correct: "status-correct", incorrect: "status-incorrect", indeterminate: "status-indeterminate" }[s] || ""; }
 
-    // ---------- Tabs ----------
-    function switchTab(name) {
-      var d2 = $("panel-day2"), d3 = $("panel-day3");
-      d2.style.display = (name === "day2") ? "block" : "none";
-      d3.style.display = (name === "day3") ? "block" : "none";
-      var map = [["tab-day2", "day2"], ["tab-day3", "day3"]];
-      map.forEach(function (pair) {
-        var b = $(pair[0]);
-        var on = pair[1] === name;
-        b.classList.toggle("active", on);
-        b.setAttribute("aria-selected", on ? "true" : "false");
-      });
-    }
-    $("tab-day2").addEventListener("click", function () { switchTab("day2"); });
-    $("tab-day3").addEventListener("click", function () { switchTab("day3"); });
-    switchTab("day2");
+    // Main tab switching is centralized in app.js (initTabs / switchMainTab).
 
     // ---------- HTTP ----------
     function http(payload, btn, ld, errEl) {

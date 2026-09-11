@@ -29,3 +29,27 @@ async def test_real_deepseek_smoke():
     answer = await service.chat("Reply with exactly: OK")
     assert answer.answer.strip(), "DeepSeek returned an empty answer"
     assert "OK" in answer.answer.upper()
+
+
+@pytest.mark.skipif(
+    not os.environ.get("DEEPSEEK_API_KEY"),
+    reason="DEEPSEEK_API_KEY is not set; skipping real API Agent smoke test",
+)
+async def test_real_deepseek_agent_smoke(tmp_path):
+    """One real API call through the persistent Agent (isolated temp DB)."""
+    from app.agents.manager import AgentManager
+    from app.agents.repository import SQLiteContextRepository
+
+    base = get_settings()
+    settings = base.model_copy(update={"agent_db_path": str(tmp_path / "agents.db")})
+    repository = SQLiteContextRepository(settings.agent_db_path)
+    manager = AgentManager(settings, repository)
+    agent = await manager.get_or_create("smoke-agent")
+
+    result = await agent.chat("Reply with exactly: OK")
+    assert result.answer.strip(), "DeepSeek returned an empty answer"
+    assert "OK" in result.answer.upper()
+
+    # the turn was persisted and restorable
+    history = await repository.load_messages("smoke-agent")
+    assert [m.role for m in history] == ["user", "assistant"]

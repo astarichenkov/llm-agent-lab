@@ -1,0 +1,65 @@
+<main class="container day6-panel" id="panel-day6">
+  <h1>День 6 — Первый агент</h1>
+  <p class="subtitle">
+    Один запрос → агент → LLM API → ответ. Каждый вызов обрабатывается
+    независимо.
+  </p>
+
+  <section class="agent-info" aria-label="Информация об агенте">
+    <div class="agent-info-item">
+      <span class="agent-info-label">Агент</span>
+      <span class="agent-info-value" id="d6-agent-name">Simple Agent (transient)</span>
+    </div>
+    <div class="agent-info-item">
+      <span class="agent-info-label">Провайдер</span>
+      <span class="agent-info-value" id="d6-agent-provider">—</span>
+    </div>
+    <div class="agent-info-item">
+      <span class="agent-info-label">Модель</span>
+      <span class="agent-info-value" id="d6-agent-model">—</span>
+    </div>
+    <div class="agent-info-item">
+      <span class="agent-info-label">Max output</span>
+      <span class="agent-info-value" id="d6-agent-max-tokens">—</span>
+    </div>
+    <div class="agent-info-item">
+      <span class="agent-info-label">Reasoning</span>
+      <span class="agent-info-value" id="d6-agent-thinking">—</span>
+    </div>
+    <div class="agent-info-item">
+      <span class="agent-info-label">Состояние</span>
+      <span class="agent-info-value">stateless</span>
+    </div>
+  </section>
+
+  <section class="agent-evolution" aria-label="Что умеет агент на этом этапе">
+    <span class="evo on">✓ отдельный класс Agent</span>
+    <span class="evo on">✓ собственный config</span>
+    <span class="evo on">✓ вызывает LLM API</span>
+    <span class="evo off">✗ история между запросами не сохраняется</span>
+  </section>
+
+  <div class="field">
+    <div class="field-label-row">
+      <label for="d6-input">Запрос к агенту</label>
+    </div>
+    <textarea id="d6-input" rows="3" maxlength="{{ max_message_length }}"
+      placeholder="Например: Объясни в одном предложении, что такое REST API."></textarea>
+    <p class="field-hint">
+      Каждый запрос обрабатывается агентом независимо. Контекст между
+      запросами не сохраняется — это следующий этап (День 7).
+    </p>
+  </div>
+
+  <div class="actions">
+    <button type="button" class="primary-btn" id="d6-send">Отправить</button>
+    <span class="loading hidden" id="d6-loading" role="status">Запрос к модели выполняется…</span>
+  </div>
+  <p id="d6-error" class="error hidden" role="alert"></p>
+
+  <section class="preview-panel" aria-labelledby="d6-result-heading">
+    <h2 id="d6-result-heading">Ответ агента</h2>
+    <p class="field-hint" id="d6-meta">—</p>
+    <div class="answer" id="d6-answer"></div>
+  </section>
+</main>

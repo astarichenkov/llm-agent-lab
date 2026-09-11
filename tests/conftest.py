@@ -9,7 +9,10 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.api.routes import get_deepseek_service
+from app.api.routes import get_agent_manager, get_deepseek_service
+from app.agents.llm import DeepSeekLLMClient
+from app.agents.manager import AgentManager
+from app.agents.repository import SQLiteContextRepository
 from app.config import Settings, get_settings
 from app.main import create_app
 from app.schemas.chat import ChatResponse
@@ -41,6 +44,39 @@ class FakeDeepSeekService:
         self.reasoning_calls: list[ReasoningRequest] = []
         self.reasoning_result: ReasoningResponse | None = None
         self.temperature_calls: list[TemperatureRequest] = []
+        # Day 7: generic completions used by the Agent layer.
+        self.generate_calls: list[dict] = []
+
+    async def generate(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        model: str | None = None,
+        temperature: float = 0.7,
+        max_tokens: int = 1024,
+        stop: str | None = None,
+        thinking: bool | None = None,
+    ) -> tuple[str, str | None, dict | None]:
+        """Mirror DeepSeekService.generate (used by the persistent Agent)."""
+        self.generate_calls.append(
+            {
+                "messages": [dict(m) for m in messages],
+                "model": model,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "stop": stop,
+                "thinking": thinking,
+            }
+        )
+        if messages:
+            self.last_message = messages[-1].get("content")
+        if self.raise_error is not None:
+            raise self.raise_error
+        return (
+            self.answer,
+            "stop",
+            {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+        )
 
     async def chat(self, message: str) -> ChatResponse:
         self.last_message = message
@@ -125,15 +161,33 @@ def fake_service() -> FakeDeepSeekService:
 
 
 @pytest.fixture
+def agent_manager(settings: Settings, fake_service: FakeDeepSeekService, tmp_path):
+    """AgentManager backed by a throwaway SQLite DB and the fake LLM."""
+    repository = SQLiteContextRepository(tmp_path / "agents.db")
+    llm = DeepSeekLLMClient(fake_service)
+    return AgentManager(
+        settings,
+        repository,
+        {"deepseek": llm, "openrouter": llm},
+    )
+
+
+@pytest.fixture
 def app(settings: Settings) -> FastAPI:
     return create_app(settings=settings)
 
 
 @pytest.fixture
-def client(app: FastAPI, settings: Settings, fake_service: FakeDeepSeekService):
-    """TestClient with the DeepSeek service swapped for a fake."""
+def client(
+    app: FastAPI,
+    settings: Settings,
+    fake_service: FakeDeepSeekService,
+    agent_manager: AgentManager,
+):
+    """TestClient with the DeepSeek service and AgentManager swapped for fakes."""
     app.dependency_overrides[get_settings] = lambda: settings
     app.dependency_overrides[get_deepseek_service] = lambda: fake_service
+    app.dependency_overrides[get_agent_manager] = lambda: agent_manager
     # Starlette 1.x re-raises handled server errors by design; the app ships
     # a global error handler, so capture its response instead.
     with TestClient(app, raise_server_exceptions=False) as test_client:

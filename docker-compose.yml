@@ -2,7 +2,7 @@
 services:
   app:
     build: .
-    image: deepseek-study-app:latest
+    image: llm-agent-lab:latest
     restart: unless-stopped
     environment:
       # .env is read by docker compose for interpolation; secrets are
@@ -14,11 +14,16 @@ services:
       ENVIRONMENT: ${ENVIRONMENT:-production}
       # Day 5 (OpenRouter model comparison) — optional, separate from DeepSeek.
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      # Day 7 — persistent agent context (SQLite).
+      AGENT_DB_PATH: ${AGENT_DB_PATH:-data/agents.db}
     expose:
       - "8000"
     volumes:
       # Persistent app log (host ./logs -> /app/logs); git-ignored.
       - ./logs:/app/logs
+      # Persistent Agent context DB (host ./data -> /app/data); git-ignored.
+      # Survives `docker compose restart` AND container recreation.
+      - ./data:/app/data
     networks:
       - appnet
 

@@ -30,3 +30,6 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# Persistent Agent context database (Day 7)
+data/

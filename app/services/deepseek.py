@@ -533,6 +533,60 @@ class DeepSeekService:
             },
         )
 
+    async def generate(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        model: str | None = None,
+        temperature: float = 0.7,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+        stop: str | None = None,
+        thinking: bool | None = None,
+    ) -> tuple[str, str | None, dict | None]:
+        """Generic chat completion used by the persistent ``Agent`` layer.
+
+        Unlike :meth:`chat` this method does NOT inject the application system
+        prompt and does NOT build the message list: the caller (an ``Agent``)
+        owns the full conversation. It simply forwards ``messages`` to the
+        provider and returns ``(content, finish_reason, usage)``.
+
+        ``thinking`` is the provider-neutral intent from ``AgentConfig``:
+
+        * ``False`` -> reasoning is explicitly DISABLED through DeepSeek's
+          official Non-Thinking mechanism (``extra_body={"thinking":
+          {"type": "disabled"}}``), so it does not spend the output budget;
+        * ``True``  -> leave the provider default untouched;
+        * ``None``  -> send no override at all (legacy/neutral behaviour, so
+          callers outside the Agent layer keep their previous requests).
+        """
+        extra_body = None
+        if thinking is False:
+            extra_body = {"thinking": {"type": "disabled"}}
+        content, finish_reason, usage = await self._call(
+            messages,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            stop=stop,
+            extra_body=extra_body,
+        )
+        # Safe diagnostic trace for the actual provider call (no secrets, no
+        # user content). Correlates the Agent config with the RAW provider
+        # result so a mis-mapped finish_reason can be spotted immediately.
+        logger.info(
+            "agent generate completed model=%s max_tokens=%s thinking=%s "
+            "extra_body=%s messages=%s finish_reason=%s content_length=%s usage=%s",
+            model or self._settings.deepseek_model,
+            max_tokens,
+            thinking,
+            extra_body,
+            len(messages),
+            finish_reason,
+            len(content),
+            usage,
+        )
+        return content, finish_reason, usage
+
     async def _call(
         self,
         messages: list[dict[str, str]],
@@ -542,6 +596,7 @@ class DeepSeekService:
         stop: str | None = None,
         temperature: float = 0.7,
         extra_body: dict | None = None,
+        model: str | None = None,
     ):
         """Run one Chat Completions call and return raw provider fields.
 
@@ -551,12 +606,12 @@ class DeepSeekService:
         subclasses as ``_complete`` on provider failures / malformed /
         empty-output responses.
 
-        ``extra_body`` (optional) is forwarded verbatim to the provider (e.g.
-        ``{"thinking": {"type": "disabled"}}`` for DeepSeek Non-Thinking). It
-        is only used by Day 4; Day 2 / Day 3 pass ``None``.
+        ``extra_body`` (optional) is forwarded verbatim to the provider. It is
+        used by Day 4 and by the Agent layer (Day 6 / Day 7) to turn DeepSeek
+        Non-Thinking mode on. Day 2 / Day 3 pass ``None``.
         """
         params: dict = {
-            "model": self._settings.deepseek_model,
+            "model": model or self._settings.deepseek_model,
             "messages": messages,
             "temperature": temperature,
         }
