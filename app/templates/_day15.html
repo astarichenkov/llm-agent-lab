@@ -1,0 +1,201 @@
+<main class="container day15-panel" id="panel-day15">
+  <h1>День 15 — Контролируемые переходы состояний</h1>
+  <p class="subtitle">
+    Жизненный цикл задачи — это не просто поле <code>state</code>, а
+    <strong>контролируемый автомат</strong>: состояния, явная таблица
+    разрешённых переходов и <strong>guards</strong> в коде. LLM может лишь
+    <em>предложить</em> действие — применяет его backend. Недопустимый переход
+    блокируется, состояние при этом не меняется.
+  </p>
+
+  <!-- 1. CURRENT TASK STATE -->
+  <section class="preview-panel" aria-labelledby="d15-state-heading">
+    <h2 id="d15-state-heading">1. Current Task State</h2>
+    <div class="d15-current">
+      <div class="d15-current-main">
+        <span class="d15-current-label">Current state</span>
+        <span class="d15-current-value" id="d15-current-state">—</span>
+      </div>
+      <div class="d15-current-row">
+        <span class="d15-current-label">Current step</span>
+        <span class="d15-current-text" id="d15-current-step">—</span>
+      </div>
+      <div class="d15-current-row">
+        <span class="d15-current-label">Expected action</span>
+        <span class="d15-current-text" id="d15-expected-action">—</span>
+      </div>
+    </div>
+    <div class="d15-flags">
+      <span class="d15-flag" id="d15-plan-approved">Plan approved: —</span>
+      <span class="d15-flag" id="d15-validation-passed">Validation passed: —</span>
+      <span class="d15-flag" id="d15-paused">Paused: —</span>
+    </div>
+  </section>
+
+  <!-- 2. LIFECYCLE -->
+  <section class="preview-panel" aria-labelledby="d15-lifecycle-heading">
+    <h2 id="d15-lifecycle-heading">2. Lifecycle</h2>
+    <p class="field-hint">
+      Этапы нельзя выбирать вручную: переходы выполняет backend по таблице
+      <code>ALLOWED_TRANSITIONS</code> и guards.
+    </p>
+    <div class="d15-lifecycle" id="d15-lifecycle" aria-label="Жизненный цикл задачи">
+      <span class="d15-state" id="d15-state-planning">PLANNING</span>
+      <span class="d15-arrow">→</span>
+      <span class="d15-state" id="d15-state-plan_approval">PLAN APPROVAL</span>
+      <span class="d15-arrow">→</span>
+      <span class="d15-state" id="d15-state-execution">EXECUTION</span>
+      <span class="d15-arrow">→</span>
+      <span class="d15-state" id="d15-state-validation">VALIDATION</span>
+      <span class="d15-arrow">→</span>
+      <span class="d15-state" id="d15-state-done">DONE</span>
+    </div>
+    <div class="d15-rollback" id="d15-rollback">
+      <span class="d15-rollback-branch">EXECUTION</span>
+      <span class="d15-rollback-arrow">↩</span>
+      <span class="d15-rollback-branch">PLANNING</span>
+      <span class="d15-rollback-label">rollback · revise plan (plan_approved сбрасывается)</span>
+    </div>
+    <p class="d15-lifecycle-note" id="d15-lifecycle-note">—</p>
+  </section>
+
+  <!-- 3. ALLOWED TRANSITIONS -->
+  <section class="preview-panel" aria-labelledby="d15-allowed-heading">
+    <h2 id="d15-allowed-heading">3. Allowed transitions</h2>
+    <p class="field-hint" id="d15-allowed-title">Allowed transitions from: —</p>
+    <ul class="d15-allowed-list" id="d15-allowed-list" aria-live="polite"></ul>
+  </section>
+
+  <!-- 4. CONTROLS -->
+  <section class="controls-panel" aria-labelledby="d15-controls-heading">
+    <h2 id="d15-controls-heading">4. Controls</h2>
+
+    <div class="field">
+      <div class="field-label-row">
+        <label for="d15-goal">Цель задачи</label>
+      </div>
+      <textarea id="d15-goal" rows="2" maxlength="{{ max_message_length }}"
+        placeholder="например: Спроектируй REST API для небольшого сервиса заметок."></textarea>
+    </div>
+
+    <div class="actions">
+      <button type="button" class="primary-btn" id="d15-create">Создать задачу</button>
+      <button type="button" class="primary-btn" id="d15-prepare">Generate / Prepare Plan</button>
+      <button type="button" class="primary-btn" id="d15-approve">Approve Plan</button>
+      <button type="button" class="primary-btn" id="d15-start-execution">Start Execution</button>
+      <button type="button" class="primary-btn" id="d15-run-validation">Run Validation</button>
+      <button type="button" class="primary-btn" id="d15-back-execution">Back to Execution</button>
+      <button type="button" class="link-btn d15-rollback-btn" id="d15-revise">↩ Revise Plan</button>
+      <button type="button" class="primary-btn" id="d15-pass">Validation passed</button>
+      <button type="button" class="primary-btn" id="d15-fail">Validation failed</button>
+      <button type="button" class="primary-btn" id="d15-complete">Complete Task</button>
+      <button type="button" class="primary-btn" id="d15-pause">Pause</button>
+      <button type="button" class="primary-btn" id="d15-resume">Resume</button>
+      <button type="button" class="link-btn" id="d15-reset">Reset demo</button>
+      <span class="loading hidden" id="d15-loading" role="status">Выполняется…</span>
+    </div>
+
+    <h3 class="d15-subheading">Тестирование запрещённых переходов</h3>
+    <div class="actions">
+      <button type="button" class="link-btn d15-skip" id="d15-skip-approval">Try skip to PLAN APPROVAL</button>
+      <button type="button" class="link-btn d15-skip" id="d15-skip-execution">Try skip to EXECUTION</button>
+      <button type="button" class="link-btn d15-skip" id="d15-skip-done">Try skip to DONE</button>
+    </div>
+
+    <div class="d15-decision hidden" id="d15-decision" role="alert">
+      <span class="d15-decision-badge" id="d15-decision-status">—</span>
+      <div class="d15-decision-body">
+        <div class="d15-decision-path" id="d15-decision-text">—</div>
+        <div class="d15-decision-reason" id="d15-decision-reason"></div>
+      </div>
+    </div>
+
+    <p id="d15-error" class="error hidden" role="alert"></p>
+    <p id="d15-note" class="d9-note hidden" role="status"></p>
+  </section>
+
+  <!-- 5. DEMO SCENARIOS -->
+  <section class="preview-panel" aria-labelledby="d15-scenario-heading">
+    <h2 id="d15-scenario-heading">5. Demo scenarios</h2>
+    <p class="field-hint">
+      Готовые стартовые точки. После выбора сценария нажимайте кнопки и
+      «Try skip…», чтобы увидеть ALLOWED / BLOCKED от backend.
+    </p>
+    <div class="actions">
+      <button type="button" class="link-btn" id="d15-scenario-happy">A. Happy path</button>
+      <button type="button" class="link-btn" id="d15-scenario-skip-planning">A. Skip planning</button>
+      <button type="button" class="link-btn" id="d15-scenario-skip-validation">B. Skip validation</button>
+      <button type="button" class="link-btn" id="d15-scenario-failed-validation">C. Failed validation</button>
+      <button type="button" class="link-btn" id="d15-scenario-pause-resume">D. Pause / Resume</button>
+    </div>
+  </section>
+
+  <!-- 6. TRANSITION LOG -->
+  <section class="preview-panel" aria-labelledby="d15-log-heading">
+    <h2 id="d15-log-heading">6. Transition Log</h2>
+    <p class="field-hint">
+      Каждая попытка перехода (и <span class="d15-log-allowed">ALLOWED</span>,
+      и <span class="d15-log-blocked">BLOCKED</span>) сохраняется в истории.
+      Blocked-переходы не меняют состояние.
+    </p>
+    <div class="d15-log" id="d15-log" aria-live="polite"></div>
+  </section>
+
+  <!-- 7. ASSISTANT — the MAIN Day 15 interaction -->
+  <section class="preview-panel d15-chat-panel" aria-labelledby="d15-chat-heading">
+    <h2 id="d15-chat-heading">7. Диалог с ассистентом (основной сценарий)</h2>
+    <p class="field-hint">
+      Чат — это основной интерфейс выполнения задачи. При создании задачи агент
+      сам выполняет этап <strong>PLANNING</strong> (генерирует реальный план) и
+      переводит её в <strong>PLAN_APPROVAL</strong>. Дальше пишите обычными
+      фразами: LLM распознаёт <strong>намерение</strong> (intent), переход
+      выполняет <strong>state machine</strong>, а затем агент выполняет работу
+      нового этапа. Блок <strong>DEBUG</strong> под сообщениями показывает, что
+      именно произошло внутри автомата. Кнопки выше — только debug/demo.
+    </p>
+    <p class="d15-chat-examples">
+      Примеры: «ок, утверждаю» · «план подходит, начинай» ·
+      «не согласен, план надо поправить» · «стоп, нужно изменить план» ·
+      «давай пока остановимся» · «продолжай» · «проверь результат» ·
+      «сразу заканчивай, проверять не надо»
+    </p>
+    <div id="d15-messages" class="d15-chat" aria-live="polite"></div>
+    <div class="field">
+      <div class="field-label-row">
+        <label for="d15-input">Сообщение ассистенту</label>
+      </div>
+      <textarea id="d15-input" rows="2" maxlength="{{ max_message_length }}"
+        placeholder="например: ок, утверждаю"></textarea>
+    </div>
+    <div class="actions">
+      <button type="button" class="primary-btn" id="d15-send">Отправить</button>
+      <label class="d15-propose">
+        debug: зафиксировать intent (без LLM):
+        <select id="d15-propose">
+          <option value="">— авто (LLM) —</option>
+          <option value="continue_planning">continue_planning</option>
+          <option value="approve_plan">approve_plan</option>
+          <option value="request_plan_changes">request_plan_changes</option>
+          <option value="revise_plan">revise_plan</option>
+          <option value="start_execution">start_execution</option>
+          <option value="request_validation">request_validation</option>
+          <option value="validation_passed">validation_passed</option>
+          <option value="validation_failed">validation_failed</option>
+          <option value="complete_task">complete_task</option>
+          <option value="pause">pause</option>
+          <option value="resume">resume</option>
+          <option value="normal_message">normal_message</option>
+        </select>
+      </label>
+    </div>
+  </section>
+
+  <!-- RAW -->
+  <section class="preview-panel" aria-labelledby="d15-raw-heading">
+    <h2 id="d15-raw-heading">Raw state</h2>
+    <details class="d13-raw-details">
+      <summary>Показать raw state (state + guards + history)</summary>
+      <pre class="d10-facts-block" id="d15-raw">—</pre>
+    </details>
+  </section>
+</main>

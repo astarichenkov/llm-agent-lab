@@ -12,6 +12,14 @@ from fastapi.staticfiles import StaticFiles
 from app.agents.manager import AgentManager
 from app.api.routes import router
 from app.config import Settings, get_settings
+from app.services.day8 import Day8TokenService
+from app.services.day9 import Day9CompressionService
+from app.services.day10 import Day10ContextService
+from app.services.day11 import Day11MemoryService
+from app.services.day12 import Day12ProfileService
+from app.services.day13 import Day13TaskService
+from app.services.day14 import Day14InvariantService
+from app.services.day15 import Day15LifecycleService
 
 LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s %(message)s"
 
@@ -77,6 +85,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = resolved
     app.state.agent_manager = AgentManager.for_settings(resolved)
+    app.state.day8_service = Day8TokenService(resolved)
+    app.state.day9_service = Day9CompressionService(resolved)
+    app.state.day10_service = Day10ContextService(resolved)
+    app.state.day11_service = Day11MemoryService(resolved)
+    app.state.day12_service = Day12ProfileService(
+        resolved, memory_service=app.state.day11_service
+    )
+    app.state.day13_service = Day13TaskService(resolved)
+    app.state.day14_service = Day14InvariantService(resolved)
+    app.state.day15_service = Day15LifecycleService(resolved)
 
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
     app.include_router(router)

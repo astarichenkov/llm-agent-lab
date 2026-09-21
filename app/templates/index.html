@@ -8,15 +8,25 @@
 </head>
 <body>
   <nav class="tabbar" aria-label="Разделы">
-    <button type="button" class="tab-btn active" id="tab-day2" data-tab="day2" aria-selected="true">День 2 — Управление ответом</button>
-    <button type="button" class="tab-btn" id="tab-day3" data-tab="day3" aria-selected="false">День 3 — Способы рассуждения</button>
-    <button type="button" class="tab-btn" id="tab-day4" data-tab="day4" aria-selected="false">День 4 — Температура</button>
-    <button type="button" class="tab-btn" id="tab-day5" data-tab="day5" aria-selected="false">День 5 — Версии моделей</button>
-    <button type="button" class="tab-btn" id="tab-day6" data-tab="day6" aria-selected="false">День 6 — Первый агент</button>
-    <button type="button" class="tab-btn" id="tab-day7" data-tab="day7" aria-selected="false">День 7 — Сохранение контекста</button>
+    <!-- Days 11-15 (the current module) are visible in the main navigation.
+         Days 1-10 stay in the DOM/API/tests but are hidden. -->
+    <button type="button" class="tab-btn day-hidden" id="tab-day2" data-tab="day2" aria-selected="false" hidden>День 2 — Управление ответом</button>
+    <button type="button" class="tab-btn day-hidden" id="tab-day3" data-tab="day3" aria-selected="false" hidden>День 3 — Способы рассуждения</button>
+    <button type="button" class="tab-btn day-hidden" id="tab-day4" data-tab="day4" aria-selected="false" hidden>День 4 — Температура</button>
+    <button type="button" class="tab-btn day-hidden" id="tab-day5" data-tab="day5" aria-selected="false" hidden>День 5 — Версии моделей</button>
+    <button type="button" class="tab-btn day-hidden" id="tab-day6" data-tab="day6" aria-selected="false" hidden>День 6 — Первый агент</button>
+    <button type="button" class="tab-btn day-hidden" id="tab-day7" data-tab="day7" aria-selected="false" hidden>День 7 — Сохранение контекста</button>
+    <button type="button" class="tab-btn day-hidden" id="tab-day8" data-tab="day8" aria-selected="false" hidden>День 8 — Работа с токенами</button>
+    <button type="button" class="tab-btn day-hidden" id="tab-day9" data-tab="day9" aria-selected="false" hidden>День 9 — Сжатие истории</button>
+    <button type="button" class="tab-btn day-hidden" id="tab-day10" data-tab="day10" aria-selected="false" hidden>День 10 — Управление контекстом</button>
+    <button type="button" class="tab-btn" id="tab-day11" data-tab="day11" aria-selected="false">День 11 — Модель памяти агента</button>
+    <button type="button" class="tab-btn" id="tab-day12" data-tab="day12" aria-selected="false">День 12 — Персонализация ассистента</button>
+    <button type="button" class="tab-btn" id="tab-day13" data-tab="day13" aria-selected="false">День 13 — Состояние задачи</button>
+    <button type="button" class="tab-btn" id="tab-day14" data-tab="day14" aria-selected="false">День 14 — Инварианты</button>
+    <button type="button" class="tab-btn" id="tab-day15" data-tab="day15" aria-selected="false">День 15 — Контроль переходов</button>
   </nav>
 
-  <main class="container" id="panel-day2">
+  <main class="container hidden" id="panel-day2">
     <h1>DeepSeek API — управление ответом модели</h1>
     <p class="subtitle">
       Один и тот же запрос с разным уровнем контроля ответа через API.
@@ -271,11 +281,35 @@
 
   {% include '_day7.html' %}
 
+  {% include '_day8.html' %}
+
+  {% include '_day9.html' %}
+
+  {% include '_day10.html' %}
+
+  {% include '_day11.html' %}
+
+  {% include '_day12.html' %}
+
+  {% include '_day13.html' %}
+
+  {% include '_day14.html' %}
+
+  {% include '_day15.html' %}
+
   <script src="/static/js/app.js"></script>
   <script src="/static/js/day3.js"></script>
   <script src="/static/js/day4.js"></script>
   <script src="/static/js/day5.js"></script>
   <script src="/static/js/day6.js"></script>
   <script src="/static/js/day7.js"></script>
+  <script src="/static/js/day8.js"></script>
+  <script src="/static/js/day9.js"></script>
+  <script src="/static/js/day10.js"></script>
+  <script src="/static/js/day11.js"></script>
+  <script src="/static/js/day12.js"></script>
+  <script src="/static/js/day13.js"></script>
+  <script src="/static/js/day14.js"></script>
+  <script src="/static/js/day15.js"></script>
 </body>
 </html>

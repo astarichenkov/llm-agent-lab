@@ -1,0 +1,129 @@
+<main class="container day13-panel" id="panel-day13">
+  <h1>День 13 — Состояние задачи (Task State Machine)</h1>
+  <p class="subtitle">
+    Задача существует как <strong>структурированное состояние</strong>
+    (stage, current_step, expected_action), а не как текст внутри истории
+    диалога. Допустимые переходы между стадиями контролируются
+    <strong>кодом</strong>: LLM не может произвольно установить stage.
+  </p>
+
+  <pre class="d13-diagram" aria-label="Схема конечного автомата">planning ──► execution ──► validation ──► done
+                 ▲              │
+                 └──────────────┘   validation → execution
+                                   (если проверка не пройдена)</pre>
+
+  <!-- CREATE TASK -->
+  <section class="controls-panel" aria-labelledby="d13-create-heading">
+    <h2 id="d13-create-heading">Новая задача</h2>
+    <div class="field">
+      <div class="field-label-row">
+        <label for="d13-goal">Цель задачи</label>
+      </div>
+      <textarea id="d13-goal" rows="2" maxlength="{{ max_message_length }}"
+        placeholder="например: Спроектируй REST API для небольшого сервиса заметок."></textarea>
+    </div>
+    <div class="actions">
+      <button type="button" class="primary-btn" id="d13-create">Создать задачу</button>
+      <button type="button" class="link-btn" id="d13-reset">Сбросить состояние</button>
+      <span class="loading hidden" id="d13-loading" role="status">Выполняется…</span>
+    </div>
+    <p id="d13-error" class="error hidden" role="alert"></p>
+    <p id="d13-note" class="d9-note hidden" role="status"></p>
+  </section>
+
+  <!-- TASK STATE -->
+  <section class="preview-panel" aria-labelledby="d13-state-heading">
+    <h2 id="d13-state-heading">TASK STATE</h2>
+    <p class="field-hint">
+      Формализованное состояние задачи. Хранится на backend и переживает
+      отдельные HTTP-запросы.
+    </p>
+
+    <div id="d13-fsm" class="d13-fsm" aria-label="Конечный автомат задачи">
+      <span class="d13-stage" id="d13-stage-planning">Planning</span>
+      <span class="d13-arrow">→</span>
+      <span class="d13-stage" id="d13-stage-execution">Execution</span>
+      <span class="d13-arrow">→</span>
+      <span class="d13-stage d13-stage-pause" id="d13-stage-pause">Pause</span>
+      <span class="d13-arrow">→</span>
+      <span class="d13-stage" id="d13-stage-validation">Validation</span>
+      <span class="d13-arrow">→</span>
+      <span class="d13-stage" id="d13-stage-done">Done</span>
+    </div>
+
+    <dl class="d13-fields">
+      <div class="d13-field">
+        <dt>Stage</dt>
+        <dd><span class="d13-value" id="d13-stage">—</span></dd>
+      </div>
+      <div class="d13-field">
+        <dt>Current step</dt>
+        <dd><span class="d13-value" id="d13-step">—</span></dd>
+      </div>
+      <div class="d13-field">
+        <dt>Expected action</dt>
+        <dd><span class="d13-value" id="d13-expected">—</span></dd>
+      </div>
+      <div class="d13-field">
+        <dt>Status</dt>
+        <dd><span class="d13-status" id="d13-status">—</span></dd>
+      </div>
+    </dl>
+
+    <div class="actions d13-actions">
+      <button type="button" class="primary-btn" id="d13-pause" disabled>Pause</button>
+      <button type="button" class="primary-btn" id="d13-resume" disabled>Resume</button>
+      <span class="d13-allowed">
+        Разрешённые переходы: <span id="d13-allowed">—</span>
+      </span>
+    </div>
+  </section>
+
+  <!-- PLAN + COMPLETED -->
+  <section class="d11-layers" aria-label="План и выполненные шаги">
+    <article class="d11-layer">
+      <h2>План (plan)</h2>
+      <p class="field-hint">Составляется на стадии planning.</p>
+      <div id="d13-plan-list" class="d11-msg-list"></div>
+    </article>
+    <article class="d11-layer">
+      <h2>Выполненные шаги (completed_steps)</h2>
+      <p class="field-hint">Обновляются кодом после каждого шага execution.</p>
+      <div id="d13-completed-list" class="d11-msg-list"></div>
+    </article>
+  </section>
+
+  <!-- RAW STATE -->
+  <section class="preview-panel" aria-labelledby="d13-raw-heading">
+    <h2 id="d13-raw-heading">Raw state</h2>
+    <details class="d13-raw-details">
+      <summary>Показать raw state</summary>
+      <pre class="d10-facts-block" id="d13-raw">—</pre>
+    </details>
+  </section>
+
+  <!-- WORK CHAT -->
+  <section aria-labelledby="d13-chat-heading">
+    <h2 id="d13-chat-heading">Работа над задачей</h2>
+    <p class="field-hint">
+      Сообщение не повторяет задачу: backend сам добавляет формализованное
+      TASK STATE в запрос к модели. После Resume работа продолжается с
+      сохранённого шага.
+    </p>
+    <div id="d13-messages" class="chat-messages" aria-live="polite"></div>
+    <div class="field">
+      <div class="field-label-row">
+        <label for="d13-input">Сообщение агенту</label>
+      </div>
+      <textarea id="d13-input" rows="2" maxlength="{{ max_message_length }}"
+        placeholder="например: Составь план / Продолжай / Проверь результат"></textarea>
+    </div>
+    <div class="actions">
+      <button type="button" class="primary-btn" id="d13-send">Отправить</button>
+    </div>
+    <details class="d13-raw-details">
+      <summary>Показать TASK STATE, отправленный в модель</summary>
+      <pre class="d10-facts-block" id="d13-context-block">—</pre>
+    </details>
+  </section>
+</main>

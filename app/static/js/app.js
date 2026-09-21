@@ -13,7 +13,7 @@
   // logic; no day-specific script can make another day unreachable. It also
   // emits a ``llmtabchange`` event so a tab can lazily load its data.
   // ------------------------------------------------------------------
-  var MAIN_TABS = ["day2", "day3", "day4", "day5", "day6", "day7"];
+  var MAIN_TABS = ["day6", "day7", "day8", "day9", "day10", "day11", "day12", "day13", "day14", "day15"];
 
   function switchMainTab(name) {
     if (MAIN_TABS.indexOf(name) === -1) return;
@@ -42,7 +42,7 @@
       if (!btn) return;
       btn.addEventListener("click", function () { switchMainTab(tab); });
     });
-    switchMainTab("day2");
+    switchMainTab("day15");
   }
 
   function initApp() {

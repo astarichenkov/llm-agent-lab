@@ -1,0 +1,130 @@
+<main class="container day8-panel" id="panel-day8">
+  <h1>День 8 — Работа с токенами</h1>
+  <p class="subtitle">
+    Считаем токены текущего сообщения, истории и ответа, показываем рост
+    стоимости по мере диалога и что именно ломается при переполнении контекста.
+  </p>
+
+  <section class="agent-info" aria-label="Параметры модели">
+    <div class="agent-info-item">
+      <span class="agent-info-label">Модель</span>
+      <span class="agent-info-value" id="d8-model">—</span>
+    </div>
+    <div class="agent-info-item">
+      <span class="agent-info-label">Context window</span>
+      <span class="agent-info-value" id="d8-context-window">—</span>
+    </div>
+    <div class="agent-info-item">
+      <span class="agent-info-label">Max output</span>
+      <span class="agent-info-value" id="d8-max-output">—</span>
+    </div>
+    <div class="agent-info-item">
+      <span class="agent-info-label">Reasoning</span>
+      <span class="agent-info-value">OFF</span>
+    </div>
+  </section>
+
+  <section class="d8-experiments" aria-label="Сценарии эксперимента">
+    <button type="button" class="link-btn" id="d8-scenario-short">Короткий диалог</button>
+    <button type="button" class="link-btn" id="d8-scenario-long">Длинный диалог</button>
+    <button type="button" class="link-btn" id="d8-fill-context">Заполнить контекст</button>
+    <button type="button" class="link-btn" id="d8-clear">Очистить</button>
+    <span class="loading hidden" id="d8-scenario-loading" role="status">Выполняется сценарий…</span>
+  </section>
+  <p class="field-hint">
+    «Короткий» — 3 подготовленных сообщения. «Длинный» — 12 объёмных
+    сообщений, чтобы показать рост input. «Заполнить контекст» — локально
+    создаёт синтетическую историю, превышающую context window (без запроса
+    к API до отдельного подтверждения).
+  </p>
+
+  <div id="d8-messages" class="chat-messages" aria-live="polite"></div>
+
+  <div class="field">
+    <div class="field-label-row">
+      <label for="d8-input">Сообщение</label>
+    </div>
+    <textarea id="d8-input" rows="3" maxlength="{{ max_message_length }}"
+      placeholder="Например: Объясни одним предложением, что такое токен."></textarea>
+  </div>
+
+  <div class="actions">
+    <button type="button" class="primary-btn" id="d8-send">Отправить</button>
+    <span class="loading hidden" id="d8-loading" role="status">Запрос к модели выполняется…</span>
+  </div>
+  <p id="d8-error" class="error hidden" role="alert"></p>
+
+  <section class="preview-panel" aria-labelledby="d8-breakdown-heading">
+    <h2 id="d8-breakdown-heading">Разбивка последнего запроса</h2>
+    <p class="field-hint">
+      Точные значения — из <code>usage</code> DeepSeek API. Локальные —
+      оценка (≈), DeepSeek не публикует tokenizer для этой модели.
+    </p>
+    <table class="d8-table">
+      <tbody>
+        <tr><td>System prompt <span class="d8-est">≈</span></td><td id="d8-sys">—</td></tr>
+        <tr><td>История до сообщения <span class="d8-est">≈</span></td><td id="d8-hist">—</td></tr>
+        <tr><td>Новое сообщение <span class="d8-est">≈</span></td><td id="d8-cur">—</td></tr>
+        <tr><td>Оценка input <span class="d8-est">≈</span></td><td id="d8-est-input">—</td></tr>
+        <tr class="d8-total"><td>Input по данным API (точно)</td><td id="d8-api-input">—</td></tr>
+        <tr><td>Ответ модели (точно)</td><td id="d8-api-output">—</td></tr>
+        <tr class="d8-total"><td>Всего за обмен (точно)</td><td id="d8-api-total">—</td></tr>
+        <tr><td>Cache hit / miss (точно)</td><td id="d8-api-cache">—</td></tr>
+        <tr><td>Стоимость обмена (оценка)</td><td id="d8-cost">—</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="preview-panel" aria-labelledby="d8-cumulative-heading">
+    <h2 id="d8-cumulative-heading">Накопительно по диалогу</h2>
+    <table class="d8-table">
+      <tbody>
+        <tr><td>Запросов</td><td id="d8-cum-requests">0</td></tr>
+        <tr><td>Сообщений в истории</td><td id="d8-cum-messages">0</td></tr>
+        <tr><td>Токенов истории сейчас <span class="d8-est">≈</span></td><td id="d8-cum-history">0</td></tr>
+        <tr><td>Суммарно input tokens</td><td id="d8-cum-input">0</td></tr>
+        <tr><td>Суммарно output tokens</td><td id="d8-cum-output">0</td></tr>
+        <tr class="d8-total"><td>Суммарно tokens</td><td id="d8-cum-total">0</td></tr>
+        <tr class="d8-total"><td>Накопленная стоимость (оценка)</td><td id="d8-cum-cost">$0.00000000</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="preview-panel" aria-labelledby="d8-table-heading">
+    <h2 id="d8-table-heading">История обменов</h2>
+    <table class="d8-table d8-table-grid">
+      <thead>
+        <tr>
+          <th>№</th><th>User ≈</th><th>History ≈</th>
+          <th>Input API</th><th>Output</th><th>Total</th><th>Cost</th>
+        </tr>
+      </thead>
+      <tbody id="d8-rows"></tbody>
+      <tfoot id="d8-totals"></tfoot>
+    </table>
+    <div class="d8-chart" id="d8-chart" aria-label="График роста токенов"></div>
+    <p class="field-hint">График: input tokens за запрос и накопленный total.</p>
+  </section>
+
+  <section class="preview-panel" aria-labelledby="d8-overflow-heading">
+    <h2 id="d8-overflow-heading">Переполнение контекста</h2>
+    <p class="field-hint">
+      Вход превышает context window модели. История НЕ обрезается — видно
+      реальное поведение API.
+    </p>
+    <table class="d8-table">
+      <tbody>
+        <tr><td>Оценка input <span class="d8-est">≈</span></td><td id="d8-ov-estimate">—</td></tr>
+        <tr><td>Лимит модели</td><td id="d8-ov-limit">—</td></tr>
+        <tr><td>Превышение <span class="d8-est">≈</span></td><td id="d8-ov-excess">—</td></tr>
+        <tr class="d8-total"><td>Статус</td><td id="d8-ov-status">—</td></tr>
+      </tbody>
+    </table>
+    <div class="actions">
+      <button type="button" class="primary-btn" id="d8-overflow-send" disabled>
+        Выполнить реальный запрос (переполнение)
+      </button>
+    </div>
+    <pre class="d8-provider-error hidden" id="d8-ov-provider" aria-live="polite"></pre>
+  </section>
+</main>

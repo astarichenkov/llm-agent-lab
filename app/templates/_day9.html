@@ -1,0 +1,144 @@
+<main class="container day9-panel" id="panel-day9">
+  <h1>День 9 — Сжатие истории</h1>
+  <p class="subtitle">
+    Старые сообщения заменяются summary, последние N сообщений передаются
+    без изменений. Сравните качество и расход токенов без сжатия и со сжатием.
+  </p>
+
+  <section class="agent-info" aria-label="Параметры сжатия">
+    <div class="agent-info-item">
+      <span class="agent-info-label">Модель</span>
+      <span class="agent-info-value" id="d9-model">—</span>
+    </div>
+    <div class="agent-info-item">
+      <span class="agent-info-label">Recent window</span>
+      <span class="agent-info-value" id="d9-recent">—</span>
+    </div>
+    <div class="agent-info-item">
+      <span class="agent-info-label">Batch сжатия</span>
+      <span class="agent-info-value" id="d9-batch">—</span>
+    </div>
+    <div class="agent-info-item">
+      <span class="agent-info-label">Cycles</span>
+      <span class="agent-info-value" id="d9-cycles">0</span>
+    </div>
+  </section>
+
+  <section class="d9-mode" aria-label="Режим запроса">
+    <label class="d9-radio">
+      <input type="radio" name="d9-mode" value="full" id="d9-mode-full">
+      Без сжатия
+    </label>
+    <label class="d9-radio">
+      <input type="radio" name="d9-mode" value="compressed" id="d9-mode-compressed" checked>
+      Со сжатием
+    </label>
+    <label class="d9-field">
+      recent N
+      <input type="number" id="d9-recent-input" min="1" max="50" value="6">
+    </label>
+    <label class="d9-field">
+      batch
+      <input type="number" id="d9-batch-input" min="2" max="50" value="10">
+    </label>
+  </section>
+
+  <section class="d9-experiments" aria-label="Сценарии">
+    <button type="button" class="link-btn" id="d9-seed">Заполнить тестовый длинный диалог</button>
+    <button type="button" class="link-btn" id="d9-ask-control">Контрольный вопрос</button>
+    <button type="button" class="link-btn" id="d9-clear">Очистить</button>
+    <span class="loading hidden" id="d9-loading" role="status">Запрос к модели выполняется…</span>
+  </section>
+  <p class="field-hint">
+    Тестовый диалог начинается с архитектурных фактов (проект Orion, FastAPI,
+    PostgreSQL, запрет Redis, stateless API, JWT), затем идёт обсуждение, чтобы
+    факты вышли за recent-window и могли сохраниться только в summary.
+  </p>
+
+  <div class="d9-legend" aria-label="Легенда диалога">
+    <span class="d9-legend-item d9-zone-recent">recent window — передаётся дословно</span>
+    <span class="d9-legend-item d9-zone-pending">вне окна, ещё не сжато — модель не видит</span>
+    <span class="d9-legend-item d9-zone-summarized">уже в памяти агента (summary)</span>
+  </div>
+
+  <div id="d9-messages" class="chat-messages" aria-live="polite"></div>
+
+  <div class="field">
+    <div class="field-label-row">
+      <label for="d9-input">Сообщение</label>
+    </div>
+    <textarea id="d9-input" rows="3" maxlength="{{ max_message_length }}"
+      placeholder="Например: Какие ключевые архитектурные решения мы выбрали?"></textarea>
+  </div>
+
+  <div class="actions">
+    <button type="button" class="primary-btn" id="d9-send">Отправить</button>
+  </div>
+  <p id="d9-error" class="error hidden" role="alert"></p>
+  <p id="d9-compression-note" class="d9-note hidden" role="status"></p>
+
+  <section class="preview-panel" aria-labelledby="d9-diag-heading">
+    <h2 id="d9-diag-heading">Диагностика сжатия</h2>
+    <table class="d9-table">
+      <tbody>
+        <tr><td>Сообщений в полной истории</td><td id="d9-full-count">0</td></tr>
+        <tr><td>Уже в summary</td><td id="d9-summarized-count">0</td></tr>
+        <tr><td>Последних сообщений как есть</td><td id="d9-recent-count">0</td></tr>
+        <tr><td>Ожидают сжатия</td><td id="d9-pending-count">0</td></tr>
+        <tr><td>Полная история <span class="d9-est">≈</span></td><td id="d9-full-tokens">0</td></tr>
+        <tr><td>Summary <span class="d9-est">≈</span></td><td id="d9-summary-tokens">0</td></tr>
+        <tr><td>Recent history <span class="d9-est">≈</span></td><td id="d9-recent-tokens">0</td></tr>
+        <tr class="d9-total"><td>Compressed context <span class="d9-est">≈</span></td><td id="d9-compressed-tokens">0</td></tr>
+        <tr><td>Сэкономлено токенов <span class="d9-est">≈</span></td><td id="d9-saved">0</td></tr>
+        <tr><td>Экономия</td><td id="d9-saved-percent">0%</td></tr>
+        <tr><td>Compression cycles</td><td id="d9-cycles-diag">0</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="preview-panel" aria-labelledby="d9-summary-heading">
+    <h2 id="d9-summary-heading">Текущее summary (та же память агента)</h2>
+    <p class="field-hint">
+      Этот же текст показан карточкой «Память агента» в начале диалога.
+    </p>
+    <details class="d9-details" id="d9-summary-details">
+      <summary>Показать / скрыть текст summary</summary>
+      <pre class="d9-summary" id="d9-summary-text">(summary ещё не построен)</pre>
+    </details>
+  </section>
+
+  <section class="preview-panel" aria-labelledby="d9-metrics-heading">
+    <h2 id="d9-metrics-heading">Рост токенов по шагам</h2>
+    <table class="d9-table d9-table-grid">
+      <thead>
+        <tr>
+          <th>Шаг</th><th>Режим</th><th>Full context ≈</th>
+          <th>Compressed ≈</th><th>Saved ≈</th><th>Saved %</th>
+        </tr>
+      </thead>
+      <tbody id="d9-rows"></tbody>
+    </table>
+    <div class="d9-chart" id="d9-chart" aria-label="График full и compressed контекста"></div>
+    <p class="field-hint">
+      Full context продолжает расти; compressed context после начала
+      суммирования растёт заметно медленнее.
+    </p>
+  </section>
+
+  <section class="preview-panel" aria-labelledby="d9-answers-heading">
+    <h2 id="d9-answers-heading">Сравнение ответов</h2>
+    <p class="field-hint">
+      Запустите контрольный вопрос в обоих режимах и сравните ответы.
+    </p>
+    <div class="d9-answers">
+      <div class="d9-answer-card">
+        <h3>Без сжатия</h3>
+        <div class="d9-answer" id="d9-answer-full">—</div>
+      </div>
+      <div class="d9-answer-card">
+        <h3>Со сжатием</h3>
+        <div class="d9-answer" id="d9-answer-compressed">—</div>
+      </div>
+    </div>
+  </section>
+</main>

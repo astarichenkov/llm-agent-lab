@@ -1,0 +1,174 @@
+<main class="container day12-panel" id="panel-day12">
+  <h1>День 12 — Персонализация ассистента</h1>
+  <p class="subtitle">
+    Профиль пользователя хранится <strong>отдельно</strong> от истории диалога
+    и от памяти. Backend автоматически превращает его в инструкции и добавляет
+    к <strong>каждому</strong> запросу — повторять предпочтения в сообщении не
+    нужно. Профиль определяет только <em>как</em> отвечать, но никогда не
+    отменяет системные правила приложения.
+  </p>
+
+  <pre class="d11-diagram" aria-label="Схема формирования запроса">System / application rules   ← высший приоритет
+        +
+USER PROFILE                 ← стиль, формат, ограничения (этот день)
+        +
+Memory / Context             ← слои памяти Дня 11
+        +
+Conversation history
+        +
+Current user message
+        ↓
+DeepSeek</pre>
+
+  <!-- ACTIVE PROFILE -->
+  <section class="preview-panel" aria-labelledby="d12-active-heading">
+    <h2 id="d12-active-heading">Активный профиль</h2>
+    <p class="d11-big" id="d12-active-style">—</p>
+    <div id="d12-active-badges" class="d11-layer-chips"></div>
+    <p class="field-hint">
+      Профиль сохраняется на backend и применяется к следующим сообщениям
+      автоматически.
+    </p>
+  </section>
+
+  <!-- PRESETS -->
+  <section class="d11-experiments" aria-label="Готовые профили">
+    <span class="d12-presets-label">Готовые профили:</span>
+    <div id="d12-presets" class="d12-presets"></div>
+  </section>
+
+  <!-- EDITOR -->
+  <section class="controls-panel" aria-labelledby="d12-editor-heading">
+    <h2 id="d12-editor-heading">Профиль пользователя</h2>
+
+    <label class="d11-field">
+      Имя пользователя
+      <input type="text" id="d12-name" maxlength="100" placeholder="например, Антон">
+    </label>
+
+    <label class="d11-field">
+      Стиль ответа
+      <select id="d12-style">
+        <option value="concise">concise — краткий</option>
+        <option value="detailed">detailed — подробный</option>
+        <option value="technical">technical — технический</option>
+      </select>
+    </label>
+
+    <fieldset class="d12-fieldset">
+      <legend>Формат ответа</legend>
+      <label class="d11-check"><input type="checkbox" id="d12-f-structured"> структурированный (по разделам)</label>
+      <label class="d11-check"><input type="checkbox" id="d12-f-lists"> использовать списки</label>
+      <label class="d11-check"><input type="checkbox" id="d12-f-examples"> примеры, где полезно</label>
+      <label class="d11-check"><input type="checkbox" id="d12-f-code"> код, когда уместно</label>
+    </fieldset>
+
+    <fieldset class="d12-fieldset">
+      <legend>Ограничения</legend>
+      <label class="d11-check"><input type="checkbox" id="d12-c-no-emoji"> без emoji</label>
+      <label class="d11-check"><input type="checkbox" id="d12-c-no-intro"> без длинного вступления</label>
+      <label class="d11-check"><input type="checkbox" id="d12-c-no-lists"> без списков</label>
+      <label class="d11-field">
+        Язык ответа
+        <select id="d12-lang">
+          <option value="ru">русский</option>
+          <option value="en">english</option>
+        </select>
+      </label>
+    </fieldset>
+
+    <div class="field">
+      <div class="field-label-row">
+        <label for="d12-custom">Свои инструкции</label>
+      </div>
+      <textarea id="d12-custom" rows="4" maxlength="4000"
+        placeholder="Например: отвечай как быдло&#10;Пиши только транслитом&#10;Обращайся ко мне на «вы»&#10;В конце каждого ответа добавляй краткий вывод"></textarea>
+      <p class="field-hint">
+        Произвольная инструкция своими словами. Сохраняется вместе с профилем,
+        автоматически добавляется в блок персонализации и не может отменить
+        системные правила приложения.
+      </p>
+    </div>
+
+    <div class="actions">
+      <button type="button" class="primary-btn" id="d12-save">Сохранить профиль</button>
+      <span class="loading hidden" id="d12-loading" role="status">Выполняется…</span>
+      <span class="d12-save-status" id="d12-save-status"></span>
+    </div>
+    <p id="d12-error" class="error hidden" role="alert"></p>
+    <p id="d12-note" class="d9-note hidden" role="status"></p>
+  </section>
+
+  <!-- INSTRUCTIONS -->
+  <section class="preview-panel" aria-labelledby="d12-instr-heading">
+    <h2 id="d12-instr-heading">Инструкции, которые получает модель</h2>
+    <p class="field-hint">
+      Формируются только на backend из структурированного профиля.
+    </p>
+    <pre class="d10-facts-block" id="d12-instructions">—</pre>
+  </section>
+
+  <!-- PERSONALIZED CHAT -->
+  <section aria-labelledby="d12-chat-heading">
+    <h2 id="d12-chat-heading">Персонализированный диалог (профиль + память)</h2>
+    <section class="d11-params" aria-label="Настройки памяти">
+      <label class="d11-check">
+        <input type="checkbox" id="d12-use-memory" checked>
+        Memory Layers (День 11) включены
+      </label>
+      <label class="d11-check">
+        <input type="checkbox" id="d12-classify" checked>
+        MemoryClassifier (LLM)
+      </label>
+    </section>
+
+    <div id="d12-messages" class="chat-messages" aria-live="polite"></div>
+
+    <div class="field">
+      <div class="field-label-row">
+        <label for="d12-input">Сообщение</label>
+      </div>
+      <textarea id="d12-input" rows="3" maxlength="{{ max_message_length }}"
+        placeholder="Обычный вопрос без инструкций по стилю. Профиль применится сам."></textarea>
+    </div>
+    <div class="actions">
+      <button type="button" class="primary-btn" id="d12-send">Отправить</button>
+    </div>
+  </section>
+
+  <!-- WHAT WENT INTO THE REQUEST -->
+  <section class="d11-layers" aria-label="Что ушло в запрос">
+    <article class="d11-layer">
+      <h2>CONTEXT BUILDER</h2>
+      <p class="field-hint">Слои, попавшие в основной prompt (в порядке приоритета).</p>
+      <p class="d11-big" id="d12-context-summary">—</p>
+      <div id="d12-context-layers" class="d11-layer-chips"></div>
+    </article>
+    <article class="d11-layer">
+      <h2>MEMORY (День 11)</h2>
+      <p class="field-hint">Персонализация работает поверх существующей памяти.</p>
+      <p class="d11-big" id="d12-memory-summary">—</p>
+      <div id="d12-memory-list" class="d11-msg-list"></div>
+    </article>
+  </section>
+
+  <!-- COMPARE -->
+  <section class="controls-panel" aria-labelledby="d12-compare-heading">
+    <h2 id="d12-compare-heading">Сравнение профилей на одном вопросе</h2>
+    <p class="field-hint">
+      Один и тот же текст запроса отправляется для профилей «Краткий»,
+      «Подробный» и «Технический». Изолированные сессии, память отключена —
+      разница в ответах вызвана только профилем.
+    </p>
+    <div class="field">
+      <div class="field-label-row">
+        <label for="d12-demo-prompt">Вопрос (одинаковый для всех профилей)</label>
+      </div>
+      <textarea id="d12-demo-prompt" rows="2" maxlength="{{ max_message_length }}"></textarea>
+    </div>
+    <div class="actions">
+      <button type="button" class="primary-btn" id="d12-compare-run">Сравнить профили</button>
+    </div>
+    <div id="d12-compare-results" class="d12-compare-grid" aria-live="polite"></div>
+  </section>
+</main>

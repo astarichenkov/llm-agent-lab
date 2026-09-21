@@ -1,0 +1,190 @@
+<main class="container day11-panel" id="panel-day11">
+  <h1>День 11 — Модель памяти агента</h1>
+  <p class="subtitle">
+    Три <strong>явно разделённых слоя памяти</strong>: short-term (текущий
+    диалог), working (состояние текущей задачи) и long-term (устойчивые
+    сведения между сессиями). Это <em>другая ось</em>, чем стратегии
+    управления контекстом из Дня 10: память решает <strong>что хранить</strong>,
+    а стратегия — <strong>что из этого отправить модели</strong>.
+  </p>
+
+  <pre class="d11-diagram" aria-label="Схема архитектуры памяти">USER MESSAGE
+   │
+   ▼
+MemoryClassifier  ──►  Short-term (session)   — детерминированно, без LLM
+   │                    Working    (task)      — структурированное состояние
+   │                    Long-term  (durable)   — key/value, переживает сессию
+   ▼
+Context Builder  ──►  Context Strategy (Sliding Window, День 10)
+   │
+   ▼
+DeepSeek</pre>
+
+  <section class="d11-params" aria-label="Настройки памяти">
+    <label class="d11-field">
+      Context strategy
+      <select id="d11-strategy">
+        <option value="sliding_window" selected>Sliding Window</option>
+        <option value="full">Full short-term</option>
+      </select>
+    </label>
+    <label class="d11-field">
+      window N
+      <input type="number" id="d11-window-input" min="1" max="100" value="4">
+    </label>
+    <label class="d11-check">
+      <input type="checkbox" id="d11-use-memory" checked>
+      Memory Layers включены
+    </label>
+    <label class="d11-check">
+      <input type="checkbox" id="d11-classify" checked>
+      MemoryClassifier (LLM)
+    </label>
+    <label class="d11-check">
+      <input type="checkbox" id="d11-include-lt" checked>
+      Long-term в контекст
+    </label>
+    <label class="d11-check">
+      <input type="checkbox" id="d11-include-working" checked>
+      Working в контекст
+    </label>
+  </section>
+  <p class="field-hint">
+    Short-term формируется детерминированно из сообщений сессии и никогда не
+    классифицируется моделью. MemoryClassifier решает только, что попадает в
+    Working и Long-term.
+  </p>
+
+  <section class="agent-info" aria-label="Текущее состояние">
+    <div class="agent-info-item">
+      <span class="agent-info-label">Модель</span>
+      <span class="agent-info-value" id="d11-model">—</span>
+    </div>
+    <div class="agent-info-item">
+      <span class="agent-info-label">Session</span>
+      <span class="agent-info-value" id="d11-session-id">—</span>
+    </div>
+  </section>
+
+  <section class="d11-experiments" aria-label="Действия">
+    <button type="button" class="link-btn" id="d11-demo-run">Запустить demo-сценарий</button>
+    <button type="button" class="link-btn" id="d11-seed">Демо-память (без API)</button>
+    <button type="button" class="link-btn" id="d11-new-session">Новая сессия</button>
+    <button type="button" class="link-btn" id="d11-clear-st">Очистить Short-term</button>
+    <button type="button" class="link-btn" id="d11-clear-working">Очистить Working</button>
+    <button type="button" class="link-btn" id="d11-clear-lt">Очистить Long-term</button>
+    <span class="loading hidden" id="d11-loading" role="status">Выполняется…</span>
+  </section>
+  <p class="field-hint" id="d11-progress">—</p>
+  <p id="d11-note" class="d9-note hidden" role="status"></p>
+
+  <div id="d11-messages" class="chat-messages" aria-live="polite"></div>
+
+  <div class="field">
+    <div class="field-label-row">
+      <label for="d11-input">Сообщение</label>
+    </div>
+    <textarea id="d11-input" rows="3" maxlength="{{ max_message_length }}"
+      placeholder="Например: Предложи архитектуру хранения данных с учётом моих требований."></textarea>
+  </div>
+  <div class="actions">
+    <button type="button" class="primary-btn" id="d11-send">Отправить</button>
+  </div>
+  <p id="d11-error" class="error hidden" role="alert"></p>
+
+  <!-- РЕШЕНИЕ О СОХРАНЕНИИ -->
+  <section class="preview-panel" id="d11-decision-panel" aria-labelledby="d11-decision-heading">
+    <h2 id="d11-decision-heading">Решение о сохранении</h2>
+    <div class="d11-save-decision">
+      <div class="d11-save-row">
+        <span class="d11-save-layer">Short-term</span>
+        <span class="d11-save-result" id="d11-save-st">—</span>
+      </div>
+      <div class="d11-save-row">
+        <span class="d11-save-layer">Working Memory</span>
+        <span class="d11-save-result" id="d11-save-working">— Ничего</span>
+      </div>
+      <div class="d11-save-row">
+        <span class="d11-save-layer">Long-term Memory</span>
+        <span class="d11-save-result" id="d11-save-lt">— Ничего</span>
+      </div>
+      <div class="d11-save-row d11-save-total">
+        <span class="d11-save-layer">Итог:</span>
+        <span class="d11-save-result" id="d11-save-summary">—</span>
+      </div>
+    </div>
+    <p class="d11-big" id="d11-decision-status">—</p>
+    <div id="d11-decision-list" class="d11-decision-list"></div>
+    <p id="d11-decision-error" class="d9-note hidden"></p>
+
+    <div class="d11-save-rules">
+      <p class="field-hint"><strong>Куда сохранять:</strong></p>
+      <pre class="d10-facts-block">Short-term — текущий диалог.
+Working — данные текущей задачи: цель, ограничения, требования, решения.
+Long-term — устойчивые факты и предпочтения, полезные в будущих сессиях.
+Не сохранять — сообщения без полезного состояния.</pre>
+      <p class="field-hint">
+        Working и Long-term выбирает MemoryClassifier для каждого сообщения.
+        Short-term заполняется автоматически историей текущей сессии.
+      </p>
+    </div>
+  </section>
+
+  <!-- MEMORY LAYERS -->
+  <section class="d11-layers" aria-label="Слои памяти">
+    <article class="d11-layer" id="d11-st-panel">
+      <h2>SHORT-TERM MEMORY</h2>
+      <p class="field-hint">Сообщения текущей сессии. Ограниченный срок жизни,
+        session scoped, формируется без LLM.</p>
+      <p class="d11-big"><span id="d11-st-count">0</span> сообщений</p>
+      <div id="d11-st-list" class="d11-msg-list"></div>
+    </article>
+
+    <article class="d11-layer" id="d11-working-panel">
+      <h2>WORKING MEMORY</h2>
+      <p class="field-hint">Структурированное состояние текущей задачи.
+        Хранится отдельно от истории сообщений.</p>
+      <p class="d11-big"><span id="d11-working-count">0</span> записей</p>
+      <pre class="d10-facts-block" id="d11-working-block">(пусто)</pre>
+      <details class="d10-details">
+        <summary>Показать structured JSON</summary>
+        <pre class="d10-facts-json" id="d11-working-json">{}</pre>
+      </details>
+    </article>
+
+    <article class="d11-layer" id="d11-lt-panel">
+      <h2>LONG-TERM MEMORY</h2>
+      <p class="field-hint">Устойчивые сведения между сессиями. Хранятся в
+        отдельном JSON-файле и переживают новую сессию.</p>
+      <p class="d11-big"><span id="d11-lt-count">0</span> записей</p>
+      <pre class="d10-facts-block" id="d11-lt-block">(пусто)</pre>
+      <details class="d10-details">
+        <summary>Показать structured JSON</summary>
+        <pre class="d10-facts-json" id="d11-lt-json">{}</pre>
+      </details>
+    </article>
+  </section>
+
+  <!-- CONTEXT BUILDER -->
+  <section class="preview-panel" id="d11-context-panel" aria-labelledby="d11-context-heading">
+    <h2 id="d11-context-heading">Context Builder — что ушло в запрос</h2>
+    <p class="d11-big" id="d11-ctx-summary">—</p>
+    <p class="field-hint">Слои, попавшие в основной prompt:</p>
+    <div id="d11-ctx-layers" class="d11-layer-chips"></div>
+    <table class="d10-table">
+      <tbody>
+        <tr><td>Short-term messages всего</td><td id="d11-ctx-total">0</td></tr>
+        <tr><td>Из них отправлено</td><td id="d11-ctx-sent">0</td></tr>
+        <tr class="d10-total"><td>Выпало (sliding window)</td><td id="d11-ctx-dropped">0</td></tr>
+      </tbody>
+    </table>
+    <details class="d10-details" id="d11-ctx-dropped-details">
+      <summary>Сообщения, выпавшие из short-term контекста</summary>
+      <div id="d11-ctx-dropped-list" class="d10-msg-list"></div>
+    </details>
+    <details class="d10-details">
+      <summary>Показать actual long-term / working блоки</summary>
+      <pre class="d10-facts-block" id="d11-ctx-blocks">—</pre>
+    </details>
+  </section>
+</main>

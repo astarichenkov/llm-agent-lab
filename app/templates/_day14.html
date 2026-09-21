@@ -1,0 +1,70 @@
+<main class="container day14-panel" id="panel-day14">
+  <h1>День 14 — Инварианты и ограничения состояния</h1>
+  <p class="subtitle">
+    Инварианты — это обязательные ограничения, которые ассистент
+    <strong>не имеет права нарушать</strong>. Они хранятся
+    <strong>отдельно от истории диалога</strong> и передаются модели как
+    отдельный блок <code>ACTIVE INVARIANTS</code>. Конфликт запроса с
+    инвариантом определяется детерминированно в коде.
+  </p>
+
+  <!-- ACTIVE INVARIANTS (visually separated from the chat) -->
+  <section class="preview-panel" aria-labelledby="d14-inv-heading">
+    <h2 id="d14-inv-heading">ACTIVE INVARIANTS</h2>
+    <p class="field-hint">
+      Хранятся отдельным JSON-файлом, а не как сообщения в истории. Модель
+      получает их отдельным контекстным блоком.
+    </p>
+    <div id="d14-invariants" class="d14-invariants" aria-live="polite"></div>
+  </section>
+
+  <!-- RESULT -->
+  <section aria-labelledby="d14-result-heading">
+    <h2 id="d14-result-heading">Результат проверки запроса</h2>
+    <div id="d14-result" class="d14-result" aria-live="polite">
+      <span id="d14-result-status" class="d14-badge">—</span>
+      <span id="d14-result-text" class="d14-result-text">
+        Отправьте запрос, чтобы проверить его на конфликт с инвариантами.
+      </span>
+    </div>
+    <div id="d14-conflicts" class="d14-conflicts"></div>
+  </section>
+
+  <!-- CHAT -->
+  <section aria-labelledby="d14-chat-heading">
+    <h2 id="d14-chat-heading">Диалог</h2>
+    <p class="field-hint">
+      Обычный чат. История диалога и инварианты — разные сущности: история
+      не содержит инвариантов.
+    </p>
+    <div id="d14-messages" class="chat-messages" aria-live="polite"></div>
+    <div class="field">
+      <div class="field-label-row">
+        <label for="d14-input">Запрос ассистенту</label>
+      </div>
+      <textarea id="d14-input" rows="2" maxlength="{{ max_message_length }}"
+        placeholder="например: Добавь endpoint /health в существующий FastAPI backend."></textarea>
+    </div>
+    <div class="actions">
+      <button type="button" class="primary-btn" id="d14-send">Отправить</button>
+      <button type="button" class="link-btn" id="d14-clear">Очистить историю</button>
+      <span class="loading hidden" id="d14-loading" role="status">Выполняется…</span>
+    </div>
+    <p id="d14-error" class="error hidden" role="alert"></p>
+    <p id="d14-note" class="d9-note hidden" role="status"></p>
+
+    <details class="d13-raw-details">
+      <summary>Показать ACTIVE INVARIANTS, отправленные модели</summary>
+      <pre class="d10-facts-block" id="d14-context-block">—</pre>
+    </details>
+  </section>
+
+  <!-- CONVERSATION RAW (to show invariants are NOT in the history) -->
+  <section class="preview-panel" aria-labelledby="d14-raw-heading">
+    <h2 id="d14-raw-heading">История диалога (raw)</h2>
+    <p class="field-hint">
+      Сообщения хранятся отдельно от инвариантов и не содержат их.
+    </p>
+    <pre class="d10-facts-block" id="d14-raw">—</pre>
+  </section>
+</main>

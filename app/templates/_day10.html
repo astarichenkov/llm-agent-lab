@@ -1,0 +1,216 @@
+<main class="container day10-panel" id="panel-day10">
+  <h1>День 10 — Управление контекстом</h1>
+  <p class="subtitle">
+    Три стратегии решают, что из прошлого попадёт в следующий запрос к модели.
+    Day 10 намеренно <strong>не использует summary</strong> истории — это
+    отдельное задание Дня 9.
+  </p>
+
+  <section class="d10-strategy" aria-label="Стратегия контекста">
+    <label class="d10-radio">
+      <input type="radio" name="d10-strategy" value="sliding_window" id="d10-s-sliding" checked>
+      Sliding Window
+    </label>
+    <label class="d10-radio">
+      <input type="radio" name="d10-strategy" value="sticky_facts" id="d10-s-sticky">
+      Sticky Facts
+    </label>
+    <label class="d10-radio">
+      <input type="radio" name="d10-strategy" value="branching" id="d10-s-branching">
+      Branching
+    </label>
+  </section>
+
+  <section class="agent-info" aria-label="Текущая стратегия">
+    <div class="agent-info-item">
+      <span class="agent-info-label">Стратегия</span>
+      <span class="agent-info-value" id="d10-strategy-name">sliding_window</span>
+    </div>
+    <div class="agent-info-item">
+      <span class="agent-info-label">Модель</span>
+      <span class="agent-info-value" id="d10-model">—</span>
+    </div>
+    <div class="agent-info-item">
+      <span class="agent-info-label">История</span>
+      <span class="agent-info-value" id="d10-history-count">0 сообщений</span>
+    </div>
+    <div class="agent-info-item">
+      <span class="agent-info-label">Active branch</span>
+      <span class="agent-info-value" id="d10-active-branch">—</span>
+    </div>
+  </section>
+
+  <section class="d10-params" aria-label="Параметры стратегии">
+    <label class="d10-field">
+      window N (Sliding)
+      <input type="number" id="d10-window-input" min="1" max="100" value="6">
+    </label>
+    <label class="d10-field">
+      recent N (Facts)
+      <input type="number" id="d10-recent-input" min="1" max="100" value="6">
+    </label>
+    <label class="d10-check">
+      <input type="checkbox" id="d10-update-facts" checked>
+      Обновлять facts отдельным LLM-вызовом
+    </label>
+  </section>
+  <p class="field-hint">
+    Семантика N: это количество отдельных сообщений <code>user/assistant</code>,
+    а не количество пар. System prompt в окно не входит и передаётся всегда.
+  </p>
+
+  <section class="d10-experiments" aria-label="Сценарии">
+    <button type="button" class="link-btn" id="d10-seed-branches">Создать demo-ветки</button>
+    <button type="button" class="link-btn" id="d10-demo-run">Запустить demo-сценарий</button>
+    <button type="button" class="link-btn" id="d10-compare-run">Сравнить Sliding и Sticky</button>
+    <button type="button" class="link-btn" id="d10-clear">Очистить стратегию</button>
+    <span class="loading hidden" id="d10-loading" role="status">Выполняется…</span>
+  </section>
+  <p class="field-hint" id="d10-progress">—</p>
+  <p id="d10-note" class="d9-note hidden" role="status"></p>
+
+  <!-- Branching controls -->
+  <section class="d10-branch-controls" id="d10-branch-panel" aria-label="Ветки">
+    <div class="d10-branch-row">
+      <span class="agent-info-label">Checkpoint:</span>
+      <span id="d10-checkpoint">—</span>
+    </div>
+    <div class="d10-branch-buttons" id="d10-branch-list"></div>
+    <div class="d10-branch-create">
+      <input type="text" id="d10-branch-name" maxlength="80" placeholder="Имя новой ветки (необязательно)">
+      <button type="button" class="primary-btn" id="d10-branch-create">Создать ветку от последнего сообщения</button>
+    </div>
+  </section>
+
+  <div id="d10-messages" class="chat-messages" aria-live="polite"></div>
+
+  <div class="field">
+    <div class="field-label-row">
+      <label for="d10-input">Сообщение</label>
+    </div>
+    <textarea id="d10-input" rows="3" maxlength="{{ max_message_length }}"
+      placeholder="Например: Составь итоговое ТЗ с учётом всех наших решений."></textarea>
+  </div>
+  <div class="actions">
+    <button type="button" class="primary-btn" id="d10-send">Отправить</button>
+  </div>
+  <p id="d10-error" class="error hidden" role="alert"></p>
+
+  <!-- Token accounting -->
+  <section class="preview-panel" aria-labelledby="d10-tokens-heading">
+    <h2 id="d10-tokens-heading">Токены текущего запроса</h2>
+    <table class="d10-table">
+      <tbody>
+        <tr><td>System prompt <span class="d10-est">≈</span></td><td id="d10-sys">—</td></tr>
+        <tr><td>Facts block <span class="d10-est">≈</span></td><td id="d10-facts-tokens">—</td></tr>
+        <tr><td>Recent window <span class="d10-est">≈</span></td><td id="d10-recent-tokens">—</td></tr>
+        <tr><td>Новое сообщение <span class="d10-est">≈</span></td><td id="d10-cur">—</td></tr>
+        <tr class="d10-total"><td>Оценка input <span class="d10-est">≈</span></td><td id="d10-est-input">—</td></tr>
+        <tr class="d10-total"><td>Input (точно, API)</td><td id="d10-api-input">—</td></tr>
+        <tr><td>Output (точно, API)</td><td id="d10-api-output">—</td></tr>
+        <tr class="d10-total"><td>Total за обмен (точно)</td><td id="d10-api-total">—</td></tr>
+        <tr><td>Facts extraction (отдельный вызов)</td><td id="d10-facts-extract">—</td></tr>
+        <tr><td>Стоимость (оценка)</td><td id="d10-cost">—</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="preview-panel" aria-labelledby="d10-cum-heading">
+    <h2 id="d10-cum-heading">Накопленные токены теста</h2>
+    <table class="d10-table">
+      <tbody>
+        <tr><td>Запросов-ответов</td><td id="d10-cum-requests">0</td></tr>
+        <tr><td>Facts extraction вызовов</td><td id="d10-cum-extractions">0</td></tr>
+        <tr><td>Input tokens (API)</td><td id="d10-cum-input">0</td></tr>
+        <tr><td>Output tokens (API)</td><td id="d10-cum-output">0</td></tr>
+        <tr class="d10-total"><td>Total tokens (API)</td><td id="d10-cum-total">0</td></tr>
+        <tr class="d10-total"><td>Extraction tokens (API)</td><td id="d10-cum-extract">0</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- Sliding window details -->
+  <section class="preview-panel" id="d10-sliding-panel" aria-labelledby="d10-sw-heading">
+    <h2 id="d10-sw-heading">Sliding Window</h2>
+    <p class="d10-big" id="d10-sw-summary">—</p>
+    <table class="d10-table">
+      <tbody>
+        <tr><td>Conversation history</td><td id="d10-full-count">0 messages</td></tr>
+        <tr><td>Sent to LLM</td><td id="d10-sent-count">0 messages</td></tr>
+        <tr class="d10-total"><td>Dropped</td><td id="d10-dropped-count">0 messages</td></tr>
+      </tbody>
+    </table>
+    <details class="d10-details" id="d10-dropped-details">
+      <summary>Какие старые сообщения были отброшены</summary>
+      <div id="d10-dropped-list" class="d10-msg-list"></div>
+    </details>
+  </section>
+
+  <!-- Sticky facts details -->
+  <section class="preview-panel" id="d10-facts-panel" aria-labelledby="d10-facts-heading">
+    <h2 id="d10-facts-heading">Sticky Facts</h2>
+    <p class="field-hint">
+      Facts — это структурированная память (goal / constraints / decisions ...),
+      а не summary диалога.
+    </p>
+    <table class="d10-table">
+      <tbody>
+        <tr><td>Количество facts</td><td id="d10-facts-count">0</td></tr>
+        <tr><td>Recent history</td><td id="d10-facts-recent">0 messages</td></tr>
+      </tbody>
+    </table>
+    <pre class="d10-facts-block" id="d10-facts-block">(facts ещё не собраны)</pre>
+    <details class="d10-details" id="d10-facts-details">
+      <summary>Показать structured JSON</summary>
+      <pre class="d10-facts-json" id="d10-facts-json">{}</pre>
+    </details>
+    <p id="d10-facts-error" class="d9-note hidden"></p>
+  </section>
+
+  <!-- Comparison -->
+  <section class="preview-panel" aria-labelledby="d10-compare-heading">
+    <h2 id="d10-compare-heading">Сравнение стратегий</h2>
+    <p class="field-hint">
+      «Remembered requirements» — это <strong>demo/evaluation metric</strong>
+      (простое совпадение ключевых слов), а не объективный AI-бенчмарк.
+    </p>
+    <table class="d10-table d10-table-grid">
+      <thead>
+        <tr>
+          <th>Strategy</th><th>Remembered facts</th><th>Input tokens</th>
+          <th>Extra calls</th><th>Stability</th><th>UX</th>
+        </tr>
+      </thead>
+      <tbody id="d10-compare-rows"></tbody>
+    </table>
+    <div class="d10-ux-notes">
+      <div class="d10-ux-card">
+        <h3>Sliding Window</h3>
+        <ul><li>+ просто</li><li>+ дёшево</li><li>− теряет старые детали</li></ul>
+      </div>
+      <div class="d10-ux-card">
+        <h3>Sticky Facts</h3>
+        <ul>
+          <li>+ сохраняет ключевые требования</li>
+          <li>+ относительно компактный контекст</li>
+          <li>− нужно поддерживать memory</li>
+          <li>− дополнительный LLM-вызов</li>
+        </ul>
+      </div>
+      <div class="d10-ux-card">
+        <h3>Branching</h3>
+        <ul>
+          <li>+ удобно сравнивать альтернативы</li>
+          <li>+ независимые сценарии</li>
+          <li>− сложнее модель состояния</li>
+          <li>− не решает проблему очень длинной ветки</li>
+        </ul>
+      </div>
+    </div>
+    <p class="field-hint">
+      Sliding Window и Sticky Facts отвечают на вопрос «что из прошлого включить
+      в контекст?». Branching — на другой вопрос: «какая версия истории сейчас
+      активна?». Поэтому Branching концептуально сочетается с окном или facts.
+    </p>
+  </section>
+</main>

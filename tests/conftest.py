@@ -9,13 +9,33 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.api.routes import get_agent_manager, get_deepseek_service
+from app.api.routes import (
+    get_agent_manager,
+    get_day8_service,
+    get_day9_service,
+    get_day10_service,
+    get_day11_service,
+    get_day12_service,
+    get_day13_service,
+    get_day14_service,
+    get_day15_service,
+    get_deepseek_service,
+)
 from app.agents.llm import DeepSeekLLMClient
 from app.agents.manager import AgentManager
 from app.agents.repository import SQLiteContextRepository
 from app.config import Settings, get_settings
 from app.main import create_app
 from app.schemas.chat import ChatResponse
+from app.services.day8 import Day8TokenService
+from app.services.day9 import Day9CompressionService
+from app.services.day10 import Day10ContextService
+from app.services.day11 import Day11MemoryService
+from app.services.day11.store import LongTermMemoryStore
+from app.services.day12 import Day12ProfileService, ProfileStore
+from app.services.day13 import Day13TaskService, TaskStore
+from app.services.day14 import Day14InvariantService, InvariantStore
+from app.services.day15 import Day15LifecycleService, LifecycleStore
 from app.schemas.compare import (
     FIXED_RESPONSE_FORMAT,
     CompareRequest,
@@ -151,8 +171,16 @@ class FakeDeepSeekService:
 
 
 @pytest.fixture
-def settings() -> Settings:
-    return Settings(deepseek_api_key="test-key", environment="test")
+def settings(tmp_path) -> Settings:
+    return Settings(
+        deepseek_api_key="test-key",
+        environment="test",
+        day11_long_term_path=str(tmp_path / "day11_long_term.json"),
+        day12_profile_path=str(tmp_path / "day12_profile.json"),
+        day13_task_path=str(tmp_path / "day13_task_state.json"),
+        day14_invariants_path=str(tmp_path / "day14_invariants.json"),
+        day15_task_path=str(tmp_path / "day15_lifecycle_state.json"),
+    )
 
 
 @pytest.fixture
@@ -173,6 +201,87 @@ def agent_manager(settings: Settings, fake_service: FakeDeepSeekService, tmp_pat
 
 
 @pytest.fixture
+def day8_service(settings: Settings, fake_service: FakeDeepSeekService) -> Day8TokenService:
+    """Day 8 token service backed by the deterministic fake provider."""
+    return Day8TokenService(settings, deepseek=fake_service)
+
+
+@pytest.fixture
+def day9_service(settings: Settings, fake_service: FakeDeepSeekService) -> Day9CompressionService:
+    """Day 9 compression service backed by the deterministic fake provider."""
+    return Day9CompressionService(settings, deepseek=fake_service)
+
+
+@pytest.fixture
+def day10_service(settings: Settings, fake_service: FakeDeepSeekService) -> Day10ContextService:
+    """Day 10 context-strategy service backed by the deterministic fake provider."""
+    return Day10ContextService(settings, deepseek=fake_service)
+
+
+@pytest.fixture
+def day11_service(settings: Settings, fake_service: FakeDeepSeekService) -> Day11MemoryService:
+    """Day 11 memory service backed by the fake provider and a temp JSON file."""
+    return Day11MemoryService(
+        settings,
+        deepseek=fake_service,
+        long_term_store=LongTermMemoryStore(settings.day11_long_term_path),
+    )
+
+
+@pytest.fixture
+def day12_service(
+    settings: Settings,
+    fake_service: FakeDeepSeekService,
+    day11_service: Day11MemoryService,
+) -> Day12ProfileService:
+    """Day 12 profile service sharing the Day 11 memory service."""
+    return Day12ProfileService(
+        settings,
+        memory_service=day11_service,
+        profile_store=ProfileStore(settings.day12_profile_path),
+    )
+
+
+@pytest.fixture
+def day13_service(
+    settings: Settings,
+    fake_service: FakeDeepSeekService,
+) -> Day13TaskService:
+    """Day 13 task service backed by the fake provider and a temp JSON file."""
+    return Day13TaskService(
+        settings,
+        deepseek=fake_service,
+        store=TaskStore(settings.day13_task_path),
+    )
+
+
+@pytest.fixture
+def day14_service(
+    settings: Settings,
+    fake_service: FakeDeepSeekService,
+) -> Day14InvariantService:
+    """Day 14 invariants service backed by the fake provider and a temp file."""
+    return Day14InvariantService(
+        settings,
+        deepseek=fake_service,
+        store=InvariantStore(settings.day14_invariants_path),
+    )
+
+
+@pytest.fixture
+def day15_service(
+    settings: Settings,
+    fake_service: FakeDeepSeekService,
+) -> Day15LifecycleService:
+    """Day 15 lifecycle service backed by the fake provider and a temp file."""
+    return Day15LifecycleService(
+        settings,
+        deepseek=fake_service,
+        store=LifecycleStore(settings.day15_task_path),
+    )
+
+
+@pytest.fixture
 def app(settings: Settings) -> FastAPI:
     return create_app(settings=settings)
 
@@ -183,11 +292,27 @@ def client(
     settings: Settings,
     fake_service: FakeDeepSeekService,
     agent_manager: AgentManager,
+    day8_service: Day8TokenService,
+    day9_service: Day9CompressionService,
+    day10_service: Day10ContextService,
+    day11_service: Day11MemoryService,
+    day12_service: Day12ProfileService,
+    day13_service: Day13TaskService,
+    day14_service: Day14InvariantService,
+    day15_service: Day15LifecycleService,
 ):
-    """TestClient with the DeepSeek service and AgentManager swapped for fakes."""
+    """TestClient with every provider-backed service swapped for a fake."""
     app.dependency_overrides[get_settings] = lambda: settings
     app.dependency_overrides[get_deepseek_service] = lambda: fake_service
     app.dependency_overrides[get_agent_manager] = lambda: agent_manager
+    app.dependency_overrides[get_day8_service] = lambda: day8_service
+    app.dependency_overrides[get_day9_service] = lambda: day9_service
+    app.dependency_overrides[get_day10_service] = lambda: day10_service
+    app.dependency_overrides[get_day11_service] = lambda: day11_service
+    app.dependency_overrides[get_day12_service] = lambda: day12_service
+    app.dependency_overrides[get_day13_service] = lambda: day13_service
+    app.dependency_overrides[get_day14_service] = lambda: day14_service
+    app.dependency_overrides[get_day15_service] = lambda: day15_service
     # Starlette 1.x re-raises handled server errors by design; the app ships
     # a global error handler, so capture its response instead.
     with TestClient(app, raise_server_exceptions=False) as test_client:

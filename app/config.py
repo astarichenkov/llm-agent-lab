@@ -62,6 +62,47 @@ class Settings(BaseSettings):
     # Persistent application log file (mounted ./logs -> /app/logs in Docker).
     app_log_file: str = "logs/app.log"
 
+    # Day 9 — context compression. Messages older than the recent window are
+    # progressively folded into a separate summary. These are Agent-level
+    # defaults; the Day 9 API can override them per request.
+    day9_recent_messages_limit: int = 6
+    day9_compression_batch_size: int = 10
+
+    # Day 10 — context-management strategies. Day 10 never summarises history:
+    # each strategy only decides WHICH past messages reach the model.
+    # ``day10_window_size`` is the number of user/assistant history items kept
+    # by the Sliding Window strategy (not message pairs).
+    day10_window_size: int = 6
+    day10_recent_messages_limit: int = 6
+
+    # Day 11 — agent memory layers (short-term / working / long-term).
+    # ``day11_window_size`` is the short-term window used by the Context
+    # Builder via the existing Day 10 SlidingWindowStrategy.
+    # ``day11_long_term_path`` is the small JSON file that persists ONLY
+    # long-term memory (it must survive a new session and a restart).
+    day11_window_size: int = 4
+    day11_long_term_path: str = "data/day11_long_term_memory.json"
+    day11_classifier_max_tokens: int = 800
+
+    # Day 12 — user profile (personalization). The profile is stored
+    # SEPARATELY from the dialog and from memory: a small JSON file.
+    day12_profile_path: str = "data/day12_user_profile.json"
+
+    # Day 13 — Task State Machine. The structured task state (stage,
+    # current_step, expected_action, plan, pause flag) is persisted to its own
+    # small JSON file so it survives separate HTTP requests and restarts.
+    day13_task_path: str = "data/day13_task_state.json"
+
+    # Day 14 — mandatory invariants. They are stored in their OWN JSON file,
+    # completely separate from the conversation history and from the Day 13
+    # task state.
+    day14_invariants_path: str = "data/day14_invariants.json"
+
+    # Day 15 — controlled state transitions. The full lifecycle state (state,
+    # plan_approved, validation_passed, pause bookkeeping and the transition
+    # history including blocked attempts) is persisted to its own JSON file.
+    day15_task_path: str = "data/day15_lifecycle_state.json"
+
     @property
     def has_deepseek_api_key(self) -> bool:
         """True when a real key was provided via the environment."""

@@ -124,6 +124,20 @@ class DeepSeekOutputLimitError(DeepSeekError):
         self.finish_reason = "length"
 
 
+class DeepSeekInvalidRequestError(DeepSeekError):
+    """The provider rejected the request itself (HTTP 400/422).
+
+    The most common real cause is the prompt exceeding the model's context
+    window. The provider's own message is surfaced verbatim (bounded and
+    secret-free) so the learner sees the genuine cause rather than a generic
+    server error.
+    """
+
+    def __init__(self, message: str, status_code: int = 400) -> None:
+        super().__init__(message, status_code)
+        self.provider_message = message
+
+
 class DeepSeekService:
     """Thin wrapper around ``AsyncOpenAI`` configured for DeepSeek."""
 
@@ -639,13 +653,26 @@ class DeepSeekService:
             logger.warning("DeepSeek connection error (type=%s)", type(exc).__name__)
             raise DeepSeekNetworkError() from exc
         except APIError as exc:
+            status = getattr(exc, "status_code", None)
+            provider_message = self._safe_provider_message(exc)
             logger.warning(
-                "DeepSeek API error (type=%s, status=%s)",
+                "DeepSeek API error (type=%s, status=%s, provider_message=%s)",
                 type(exc).__name__,
-                getattr(exc, "status_code", "?"),
+                status if status is not None else "?",
+                provider_message,
             )
+            # A 400/422 from the provider means the REQUEST itself was
+            # rejected (e.g. the prompt exceeded the model context window).
+            # Surface the provider's own wording so the real cause is visible
+            # instead of a generic 502. No secrets are included here.
+            if status in (400, 422):
+                raise DeepSeekInvalidRequestError(
+                    provider_message or "DeepSeek rejected the request as invalid.",
+                    status,
+                ) from exc
             raise DeepSeekError(
-                "The DeepSeek API reported an error. Please try again.", 502
+                "The DeepSeek API reported an error. Please try again.",
+                status if status in (402, 500, 503) else 502,
             ) from exc
         except Exception as exc:  # pragma: no cover - defensive catch-all
             logger.exception(
@@ -709,12 +736,52 @@ class DeepSeekService:
         return content.strip(), finish_reason, self._extract_usage(response)
 
     @staticmethod
+    def _safe_provider_message(exc) -> str | None:
+        """Extract a short, safe, provider-supplied error message.
+
+        The OpenAI SDK exposes the parsed error body as ``exc.body`` / the
+        exception text. We keep only a bounded, single-line string and never
+        include request headers or the API key.
+        """
+        raw = None
+        body = getattr(exc, "body", None)
+        if isinstance(body, dict):
+            error = body.get("error")
+            if isinstance(error, dict):
+                raw = error.get("message")
+            elif isinstance(body.get("message"), str):
+                raw = body.get("message")
+        elif isinstance(body, str):
+            raw = body
+        if not raw:
+            text = str(exc) or ""
+            # str(exc) usually looks like: "Error code: 400 - {...}"
+            raw = text
+        if not raw:
+            return None
+        cleaned = " ".join(raw.split())
+        return cleaned[:500]
+
+    @staticmethod
     def _extract_usage(response):
+        """Return the provider usage block as a plain dict (or ``None``).
+
+        The exact token counts are the provider's own numbers — never
+        recomputed locally. Besides the three core fields we surface the
+        context-cache split, which the pricing module uses to bill cache hits
+        and misses at their different rates.
+        """
         usage = getattr(response, "usage", None)
         if usage is None:
             return None
         out = {}
-        for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
+        for key in (
+            "prompt_tokens",
+            "completion_tokens",
+            "total_tokens",
+            "prompt_cache_hit_tokens",
+            "prompt_cache_miss_tokens",
+        ):
             val = getattr(usage, key, None)
             if val is not None:
                 out[key] = val
