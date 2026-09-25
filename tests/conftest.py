@@ -20,6 +20,7 @@ from app.api.routes import (
     get_day14_service,
     get_day15_service,
     get_deepseek_service,
+    get_mcp_client,
 )
 from app.agents.llm import DeepSeekLLMClient
 from app.agents.manager import AgentManager
@@ -36,6 +37,7 @@ from app.services.day12 import Day12ProfileService, ProfileStore
 from app.services.day13 import Day13TaskService, TaskStore
 from app.services.day14 import Day14InvariantService, InvariantStore
 from app.services.day15 import Day15LifecycleService, LifecycleStore
+from app.services.mcp import MCPClient
 from app.schemas.compare import (
     FIXED_RESPONSE_FORMAT,
     CompareRequest,
@@ -282,6 +284,12 @@ def day15_service(
 
 
 @pytest.fixture
+def mcp_client() -> MCPClient:
+    """Day 16 MCP client using the real local Demo MCP server (stdio)."""
+    return MCPClient()
+
+
+@pytest.fixture
 def app(settings: Settings) -> FastAPI:
     return create_app(settings=settings)
 
@@ -300,6 +308,7 @@ def client(
     day13_service: Day13TaskService,
     day14_service: Day14InvariantService,
     day15_service: Day15LifecycleService,
+    mcp_client: MCPClient,
 ):
     """TestClient with every provider-backed service swapped for a fake."""
     app.dependency_overrides[get_settings] = lambda: settings
@@ -313,6 +322,7 @@ def client(
     app.dependency_overrides[get_day13_service] = lambda: day13_service
     app.dependency_overrides[get_day14_service] = lambda: day14_service
     app.dependency_overrides[get_day15_service] = lambda: day15_service
+    app.dependency_overrides[get_mcp_client] = lambda: mcp_client
     # Starlette 1.x re-raises handled server errors by design; the app ships
     # a global error handler, so capture its response instead.
     with TestClient(app, raise_server_exceptions=False) as test_client:

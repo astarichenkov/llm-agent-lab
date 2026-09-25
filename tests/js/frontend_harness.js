@@ -734,6 +734,99 @@ async function testDay13PauseState() {
     store["d13-resume"].disabled === false);
 }
 
+async function testDay16Mcp() {
+  const ids = [
+    "panel-day16",
+    "d16-status", "d16-transport", "d16-server", "d16-tools-count",
+    "d16-refresh", "d16-loading", "d16-error",
+    "d16-tools", "d16-tools-empty", "d16-trace",
+  ];
+  const document = makeDocument(ids);
+  const payload = {
+    connected: true,
+    server: { name: "Week 4 Demo MCP", transport: "stdio" },
+    tools_count: 2,
+    tools: [
+      {
+        name: "echo",
+        description: "Returns supplied text.",
+        input_schema: {
+          type: "object",
+          properties: { text: { type: "string" } },
+          required: ["text"],
+        },
+      },
+      {
+        name: "get_server_info",
+        description: "Returns demo MCP server information.",
+        input_schema: { type: "object", properties: {} },
+      },
+    ],
+    trace: [
+      { step: "connect", status: "ok", message: "Connected via stdio" },
+      { step: "initialize", status: "ok", message: "MCP session initialized" },
+      { step: "list_tools", status: "ok", message: "Received 2 tools" },
+    ],
+    error: null,
+  };
+  const fetchImpl = (url) => {
+    if (url === "/api/week4/day16/mcp/status") return jsonResponse(payload);
+    return Promise.reject(new Error("unexpected fetch " + url));
+  };
+
+  runScript(document, fetchImpl, "day16.js");
+  await tick();
+
+  const store = document._store;
+  check("day16: status Connected", store["d16-status"].textContent === "Connected");
+  check("day16: transport stdio", store["d16-transport"].textContent === "stdio");
+  check("day16: server name rendered",
+    store["d16-server"].textContent === "Week 4 Demo MCP");
+  check("day16: tools count rendered", store["d16-tools-count"].textContent === "2");
+  check("day16: two tool cards rendered", store["d16-tools"].children.length === 2);
+  check("day16: first tool is echo",
+    store["d16-tools"].children[0].children[0].textContent === "echo");
+  check("day16: second tool is get_server_info",
+    store["d16-tools"].children[1].children[0].textContent === "get_server_info");
+  check("day16: echo schema shows required text",
+    store["d16-tools"].children[0].children[3].textContent === "text: string, required");
+  check("day16: trace steps rendered", store["d16-trace"].children.length === 3);
+  check("day16: error hidden on success",
+    store["d16-error"].classList.contains("hidden"));
+}
+
+async function testDay16McpFailure() {
+  const ids = [
+    "panel-day16",
+    "d16-status", "d16-transport", "d16-server", "d16-tools-count",
+    "d16-refresh", "d16-loading", "d16-error",
+    "d16-tools", "d16-tools-empty", "d16-trace",
+  ];
+  const document = makeDocument(ids);
+  const payload = {
+    connected: false,
+    server: { name: "Week 4 Demo MCP", transport: "stdio" },
+    tools_count: 0,
+    tools: [],
+    trace: [{ step: "error", status: "error", message: "Connection closed" }],
+    error: "Connection closed",
+  };
+  const fetchImpl = () => jsonResponse(payload);
+
+  runScript(document, fetchImpl, "day16.js");
+  await tick();
+
+  const store = document._store;
+  check("day16-fail: status Connection failed",
+    store["d16-status"].textContent === "Connection failed");
+  check("day16-fail: no tool cards", store["d16-tools"].children.length === 0);
+  check("day16-fail: empty message shown",
+    !store["d16-tools-empty"].classList.contains("hidden"));
+  check("day16-fail: error shown",
+    !store["d16-error"].classList.contains("hidden") &&
+    store["d16-error"].textContent === "Connection closed");
+}
+
 async function main() {
   await testDay6Metadata();
   await testDay7FullHistory();
@@ -745,6 +838,8 @@ async function main() {
   await testDay12Profile();
   await testDay13TaskState();
   await testDay13PauseState();
+  await testDay16Mcp();
+  await testDay16McpFailure();
 
   let failures = 0;
   results.forEach((r) => {

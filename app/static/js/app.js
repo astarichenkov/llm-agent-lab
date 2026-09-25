@@ -13,7 +13,13 @@
   // logic; no day-specific script can make another day unreachable. It also
   // emits a ``llmtabchange`` event so a tab can lazily load its data.
   // ------------------------------------------------------------------
-  var MAIN_TABS = ["day6", "day7", "day8", "day9", "day10", "day11", "day12", "day13", "day14", "day15"];
+  // Legacy tabs (2-15) remain switchable in code so their panels are still
+  // hidden/shown consistently, but they are removed from the visible nav.
+  // Week 4 / Day 16 is the active module.
+  var MAIN_TABS = [
+    "day2", "day3", "day4", "day5", "day6", "day7", "day8", "day9",
+    "day10", "day11", "day12", "day13", "day14", "day15", "day16"
+  ];
 
   function switchMainTab(name) {
     if (MAIN_TABS.indexOf(name) === -1) return;
@@ -42,7 +48,7 @@
       if (!btn) return;
       btn.addEventListener("click", function () { switchMainTab(tab); });
     });
-    switchMainTab("day15");
+    switchMainTab("day16");
   }
 
   function initApp() {

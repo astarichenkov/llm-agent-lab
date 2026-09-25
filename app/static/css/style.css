@@ -1498,3 +1498,132 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 }
 .d15-debug-block.allowed .d15-debug-text { color: #9fe0b8; }
 .d15-debug-block.blocked .d15-debug-text { color: #ffb4a2; }
+
+/* ---------------- Week 4 / Day 16 — MCP ---------------- */
+.week-label {
+  flex-basis: 100%;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.1rem;
+}
+
+.tab-btn:disabled,
+.tab-btn[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  border-style: dashed;
+}
+
+#panel-day16 { display: none; }
+
+.d16-status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.7rem;
+  margin-bottom: 1rem;
+}
+.d16-status-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 0.65rem 0.85rem;
+  background: var(--panel);
+}
+.d16-status-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.d16-status-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.95rem;
+  font-weight: 700;
+  word-break: break-word;
+}
+.d16-status-connected { color: #7ee2a8; }
+.d16-status-connecting { color: #ffd479; }
+.d16-status-failed { color: #ff8f7a; }
+
+.d16-tools {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.9rem;
+}
+.d16-tool-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+  background: var(--panel);
+}
+.d16-tool-name {
+  margin: 0 0 0.3rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1rem;
+}
+.d16-tool-desc { margin: 0 0 0.6rem; color: var(--muted); }
+.d16-tool-schema-label {
+  margin: 0 0 0.25rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.d16-tool-schema {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.25);
+  font-size: 0.82rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.d16-empty {
+  margin: 0.4rem 0 0;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.d16-trace {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.d16-trace-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  border-left: 3px solid var(--border);
+  padding: 0.3rem 0 0.3rem 0.7rem;
+}
+.d16-trace-step.d16-trace-error { border-left-color: #8f3b35; }
+.d16-trace-badge {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 0.12rem 0.4rem;
+  border-radius: 5px;
+  background: rgba(47, 107, 69, 0.35);
+  color: #9fe0b8;
+}
+.d16-trace-step.d16-trace-error .d16-trace-badge {
+  background: rgba(143, 59, 53, 0.35);
+  color: #ffb4a2;
+}
+.d16-trace-message {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.82rem;
+  word-break: break-word;
+}

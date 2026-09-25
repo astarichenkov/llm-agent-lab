@@ -8,8 +8,8 @@
 </head>
 <body>
   <nav class="tabbar" aria-label="Разделы">
-    <!-- Days 11-15 (the current module) are visible in the main navigation.
-         Days 1-10 stay in the DOM/API/tests but are hidden. -->
+    <!-- Legacy weeks/days 2-15 stay in the DOM/API/tests for regression, but
+         are removed from the visible UI. Only Week 4 is shown now. -->
     <button type="button" class="tab-btn day-hidden" id="tab-day2" data-tab="day2" aria-selected="false" hidden>День 2 — Управление ответом</button>
     <button type="button" class="tab-btn day-hidden" id="tab-day3" data-tab="day3" aria-selected="false" hidden>День 3 — Способы рассуждения</button>
     <button type="button" class="tab-btn day-hidden" id="tab-day4" data-tab="day4" aria-selected="false" hidden>День 4 — Температура</button>
@@ -19,11 +19,19 @@
     <button type="button" class="tab-btn day-hidden" id="tab-day8" data-tab="day8" aria-selected="false" hidden>День 8 — Работа с токенами</button>
     <button type="button" class="tab-btn day-hidden" id="tab-day9" data-tab="day9" aria-selected="false" hidden>День 9 — Сжатие истории</button>
     <button type="button" class="tab-btn day-hidden" id="tab-day10" data-tab="day10" aria-selected="false" hidden>День 10 — Управление контекстом</button>
-    <button type="button" class="tab-btn" id="tab-day11" data-tab="day11" aria-selected="false">День 11 — Модель памяти агента</button>
-    <button type="button" class="tab-btn" id="tab-day12" data-tab="day12" aria-selected="false">День 12 — Персонализация ассистента</button>
-    <button type="button" class="tab-btn" id="tab-day13" data-tab="day13" aria-selected="false">День 13 — Состояние задачи</button>
-    <button type="button" class="tab-btn" id="tab-day14" data-tab="day14" aria-selected="false">День 14 — Инварианты</button>
-    <button type="button" class="tab-btn" id="tab-day15" data-tab="day15" aria-selected="false">День 15 — Контроль переходов</button>
+    <button type="button" class="tab-btn day-hidden" id="tab-day11" data-tab="day11" aria-selected="false" hidden>День 11 — Модель памяти агента</button>
+    <button type="button" class="tab-btn day-hidden" id="tab-day12" data-tab="day12" aria-selected="false" hidden>День 12 — Персонализация ассистента</button>
+    <button type="button" class="tab-btn day-hidden" id="tab-day13" data-tab="day13" aria-selected="false" hidden>День 13 — Состояние задачи</button>
+    <button type="button" class="tab-btn day-hidden" id="tab-day14" data-tab="day14" aria-selected="false" hidden>День 14 — Инварианты</button>
+    <button type="button" class="tab-btn day-hidden" id="tab-day15" data-tab="day15" aria-selected="false" hidden>День 15 — Контроль переходов</button>
+
+    <!-- Current module: Week 4 — MCP -->
+    <span class="week-label" id="week4-label">Week 4 — MCP</span>
+    <button type="button" class="tab-btn" id="tab-day16" data-tab="day16" aria-selected="true">Day 16 — MCP Connection</button>
+    <button type="button" class="tab-btn" id="tab-day17" data-tab="day17" disabled aria-disabled="true" title="Not implemented yet">Day 17 — Coming next</button>
+    <button type="button" class="tab-btn" id="tab-day18" data-tab="day18" disabled aria-disabled="true" title="Not implemented yet">Day 18 — Coming next</button>
+    <button type="button" class="tab-btn" id="tab-day19" data-tab="day19" disabled aria-disabled="true" title="Not implemented yet">Day 19 — Coming next</button>
+    <button type="button" class="tab-btn" id="tab-day20" data-tab="day20" disabled aria-disabled="true" title="Not implemented yet">Day 20 — Coming next</button>
   </nav>
 
   <main class="container hidden" id="panel-day2">
@@ -297,6 +305,8 @@
 
   {% include '_day15.html' %}
 
+  {% include '_day16.html' %}
+
   <script src="/static/js/app.js"></script>
   <script src="/static/js/day3.js"></script>
   <script src="/static/js/day4.js"></script>
@@ -311,5 +321,6 @@
   <script src="/static/js/day13.js"></script>
   <script src="/static/js/day14.js"></script>
   <script src="/static/js/day15.js"></script>
+  <script src="/static/js/day16.js"></script>
 </body>
 </html>

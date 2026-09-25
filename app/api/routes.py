@@ -39,6 +39,7 @@ from app.services.day12 import Day12ProfileService
 from app.services.day13 import Day13TaskService, TaskStateError
 from app.services.day14 import Day14InvariantService
 from app.services.day15 import Day15Error, Day15LifecycleService
+from app.services.mcp import MCPClient
 from app.schemas.day13 import (
     Day13ChatRequest,
     Day13ChatResponse,
@@ -61,6 +62,7 @@ from app.schemas.day15 import (
     Day15TransitionResponse,
     Day15ValidationRequest,
 )
+from app.schemas.day16 import MCPStatusResponse
 from app.schemas.day10 import (
     ContextStrategyName,
     Day10BranchActivateRequest,
@@ -227,6 +229,17 @@ def get_day15_service(request: Request) -> Day15LifecycleService:
     and a temporary lifecycle file.
     """
     return request.app.state.day15_service
+
+
+def get_mcp_client(request: Request) -> MCPClient:
+    """Return the process-wide Day 16 MCP client (stdio transport).
+
+    The client owns ALL MCP transport concerns: it spawns the local Demo MCP
+    server as a subprocess, initializes the session and calls ``tools/list``.
+    Tests override this dependency to inject a client pointed at a healthy or
+    deliberately broken server.
+    """
+    return request.app.state.mcp_client
 
 
 def _agent_info(agent: Agent, settings: Settings) -> AgentInfo:
@@ -1390,3 +1403,20 @@ async def day15_reset(
     """Forget the current lifecycle state (demo/tests convenience)."""
     service.reset()
     return {"status": "cleared"}
+
+
+# ----------------------------------------------------------------------
+# Day 16 — MCP connection & tool discovery
+# ----------------------------------------------------------------------
+@router.get("/api/week4/day16/mcp/status", response_model=MCPStatusResponse)
+async def day16_mcp_status(
+    client: MCPClient = Depends(get_mcp_client),
+) -> MCPStatusResponse:
+    """Connect to the local Demo MCP server and list its tools.
+
+    This really performs the MCP handshake over ``stdio`` (spawn subprocess ->
+    initialize -> ``tools/list``) on every call. A connection/protocol failure
+    is returned as a controlled ``connected=false`` payload; no stack trace is
+    exposed to the client.
+    """
+    return await client.discover_tools()

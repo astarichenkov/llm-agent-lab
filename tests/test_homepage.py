@@ -474,30 +474,31 @@ def test_days_1_to_5_are_hidden_from_navigation(client):
     app_js = (
         Path(__file__).resolve().parents[1] / "app" / "static" / "js" / "app.js"
     ).read_text(encoding="utf-8")
-    assert 'MAIN_TABS = ["day6", "day7", "day8", "day9", "day10", "day11", "day12", "day13", "day14", "day15"]' in app_js
+    main_tabs = app_js.split("MAIN_TABS =")[1].split(";")[0]
+    # Legacy tabs stay switchable in code (so their panels are still hidden),
+    # but the active module is now Week 4 / Day 16.
     for hidden in ("day2", "day3", "day4", "day5"):
-        assert f'"{hidden}"' not in app_js.split("MAIN_TABS =")[1].split(";")[0]
-    # default landing tab is the current module (Day 15)
-    assert 'switchMainTab("day15")' in app_js
+        assert f'"{hidden}"' in main_tabs
+    assert '"day16"' in main_tabs
+    # default landing tab is the current module (Day 16)
+    assert 'switchMainTab("day16")' in app_js
 
 
 def test_days_6_to_10_are_hidden_from_navigation(client):
-    """Days 6-10 stay in the DOM/API but are no longer visible in the UI."""
+    """Days 6-15 are removed from the visible UI (Week 4 is shown instead)."""
     html = client.get("/").text
     import re
 
-    for day in ("day6", "day7", "day8", "day9", "day10"):
+    for day in (
+        "day6", "day7", "day8", "day9", "day10",
+        "day11", "day12", "day13", "day14", "day15",
+    ):
         match = re.search(
             r'<button[^>]*id="tab-' + day + r'"[^>]*>', html
         )
         assert match, f"missing tab button for {day}"
         assert "day-hidden" in match.group(0), f"{day} must be hidden"
         assert "hidden" in match.group(0), f"{day} must carry the hidden attribute"
-    # the current module's tabs (Day 11 + Day 12) stay visible
-    for day in ("day11", "day12"):
-        visible = re.search(r'<button[^>]*id="tab-' + day + r'"[^>]*>', html)
-        assert visible, f"missing visible tab for {day}"
-        assert "day-hidden" not in visible.group(0), f"{day} must be visible"
 
 
 def test_no_duplicate_ids_after_day10(client):

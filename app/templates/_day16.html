@@ -1,0 +1,60 @@
+<main class="container day16-panel" id="panel-day16">
+  <h1>Day 16 — MCP Connection</h1>
+  <p class="subtitle">
+    Backend подключается к <strong>локальному MCP server</strong> по
+    транспорту <code>stdio</code>: запускает его как subprocess, выполняет
+    MCP-инициализацию и вызывает <code>tools/list</code>. Список инструментов
+    ниже — это реальный ответ MCP server-а, а не список, захардкоженный во
+    frontend.
+  </p>
+
+  <!-- 1. CONNECTION -->
+  <section class="preview-panel" aria-labelledby="d16-connection-heading">
+    <h2 id="d16-connection-heading">MCP Connection</h2>
+    <div class="d16-status-grid">
+      <div class="d16-status-item">
+        <span class="d16-status-label">Status</span>
+        <span class="d16-status-value" id="d16-status">Disconnected</span>
+      </div>
+      <div class="d16-status-item">
+        <span class="d16-status-label">Transport</span>
+        <span class="d16-status-value" id="d16-transport">stdio</span>
+      </div>
+      <div class="d16-status-item">
+        <span class="d16-status-label">Server</span>
+        <span class="d16-status-value" id="d16-server">—</span>
+      </div>
+      <div class="d16-status-item">
+        <span class="d16-status-label">Available tools</span>
+        <span class="d16-status-value" id="d16-tools-count">0</span>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button type="button" class="primary-btn" id="d16-refresh">Reconnect / Refresh tools</button>
+      <span class="loading hidden" id="d16-loading" role="status">Connecting…</span>
+    </div>
+    <p id="d16-error" class="error hidden" role="alert"></p>
+  </section>
+
+  <!-- 2. TOOLS -->
+  <section class="preview-panel" aria-labelledby="d16-tools-heading">
+    <h2 id="d16-tools-heading">Available tools</h2>
+    <p class="field-hint">
+      Получено через MCP <code>tools/list</code>. Input schema показана так,
+      как её вернул сервер.
+    </p>
+    <div class="d16-tools" id="d16-tools" aria-live="polite"></div>
+    <p class="d16-empty hidden" id="d16-tools-empty">No MCP tools returned</p>
+  </section>
+
+  <!-- 3. TRACE -->
+  <section class="preview-panel" aria-labelledby="d16-trace-heading">
+    <h2 id="d16-trace-heading">MCP Trace</h2>
+    <p class="field-hint">
+      Этапы реального подключения: запуск server → stdio connect →
+      initialize → <code>tools/list</code> → закрытие соединения.
+    </p>
+    <ol class="d16-trace" id="d16-trace" aria-live="polite"></ol>
+  </section>
+</main>
