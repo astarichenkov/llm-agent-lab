@@ -18,11 +18,15 @@ credentials. Days 17-20 will build on this foundation.
 from app.services.mcp.client import (
     MCPClient,
     MCPServerConfig,
+    MCPToolCallResult,
     default_server_config,
+    victorialogs_server_config,
 )
 
 __all__ = [
     "MCPClient",
     "MCPServerConfig",
+    "MCPToolCallResult",
     "default_server_config",
+    "victorialogs_server_config",
 ]

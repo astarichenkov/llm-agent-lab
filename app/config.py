@@ -103,6 +103,24 @@ class Settings(BaseSettings):
     # history including blocked attempts) is persisted to its own JSON file.
     day15_task_path: str = "data/day15_lifecycle_state.json"
 
+    # Day 17 — VictoriaLogs MCP tool. The base URL is REQUIRED only when the
+    # Day 17 feature is used; its absence must never break application startup
+    # or Day 16 (see ``VictoriaLogsClient`` which fails lazily).
+    #
+    # ``victoria_logs_service_field`` is CONFIGURABLE on purpose: the exact
+    # field that stores the service name is deployment-specific. The default
+    # ``service`` is an assumption that MUST be verified against real data
+    # (the provided value can be overridden with VICTORIA_LOGS_SERVICE_FIELD).
+    victoria_logs_base_url: str = ""
+    victoria_logs_service_field: str = "service"
+    victoria_logs_timeout_seconds: float = 5.0
+    # Internal corporate CAs are often absent from the public trust store; the
+    # flag stays ``True`` by default (never disable TLS verification silently).
+    victoria_logs_verify_ssl: bool = True
+    # Preferred secure alternative to disabling verification: path to a CA
+    # bundle (PEM) that validates the VictoriaLogs certificate.
+    victoria_logs_ca_bundle: str = ""
+
     @property
     def has_deepseek_api_key(self) -> bool:
         """True when a real key was provided via the environment."""

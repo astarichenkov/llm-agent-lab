@@ -1627,3 +1627,60 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
   font-size: 0.82rem;
   word-break: break-word;
 }
+
+/* ---------------- Day 17 — interval picker + result ---------------- */
+.d17-interval {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 0.75rem 0.9rem;
+  margin: 0.9rem 0 0.6rem;
+  background: var(--panel);
+}
+.d17-interval-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
+}
+.d17-window-label {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.d17-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+}
+.d17-range {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  margin-bottom: 0.6rem;
+}
+.d17-range-field {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.d17-range-field input[type="datetime-local"] {
+  background: rgba(0, 0, 0, 0.25);
+  color: inherit;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 0.35rem 0.5rem;
+  font: inherit;
+  font-size: 0.82rem;
+}
+.d17-answer {
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-left: 3px solid #3f6f8f;
+  padding: 0.4rem 0 0.4rem 0.8rem;
+}
+.d17-samples { margin-top: 0.2rem; }

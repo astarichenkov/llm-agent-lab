@@ -20,6 +20,7 @@ from app.services.day12 import Day12ProfileService
 from app.services.day13 import Day13TaskService
 from app.services.day14 import Day14InvariantService
 from app.services.day15 import Day15LifecycleService
+from app.services.day17 import Day17LogsService
 from app.services.mcp import MCPClient
 
 LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s %(message)s"
@@ -99,6 +100,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Day 16 — local MCP client (stdio). Stateless: every request/refresh
     # spawns a fresh Demo MCP server subprocess and lists its tools.
     app.state.mcp_client = MCPClient()
+    # Day 17 — VictoriaLogs MCP tool-calling service. Constructing it does
+    # NOT contact VictoriaLogs: the base URL is only required when a chat
+    # request is actually made, so a missing VICTORIA_LOGS_BASE_URL never
+    # breaks startup or Day 16.
+    app.state.day17_service = Day17LogsService(resolved)
 
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
     app.include_router(router)

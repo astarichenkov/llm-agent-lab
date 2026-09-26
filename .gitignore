@@ -33,3 +33,9 @@ logs/
 
 # Persistent Agent context database (Day 7)
 data/
+
+# Internal CA certificates (Day 17) — never commit real CA material
+certs/*.crt
+certs/*.pem
+certs/*.cer
+certs/*.key

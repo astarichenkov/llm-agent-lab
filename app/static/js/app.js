@@ -18,7 +18,8 @@
   // Week 4 / Day 16 is the active module.
   var MAIN_TABS = [
     "day2", "day3", "day4", "day5", "day6", "day7", "day8", "day9",
-    "day10", "day11", "day12", "day13", "day14", "day15", "day16"
+    "day10", "day11", "day12", "day13", "day14", "day15", "day16",
+    "day17"
   ];
 
   function switchMainTab(name) {
@@ -48,7 +49,9 @@
       if (!btn) return;
       btn.addEventListener("click", function () { switchMainTab(tab); });
     });
-    switchMainTab("day16");
+    // Week 4 / Day 17 is the current module and opens by default.
+    // Day 16 remains fully reachable by clicking its tab.
+    switchMainTab("day17");
   }
 
   function initApp() {

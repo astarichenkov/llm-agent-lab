@@ -16,6 +16,15 @@ services:
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       # Day 7 — persistent agent context (SQLite).
       AGENT_DB_PATH: ${AGENT_DB_PATH:-data/agents.db}
+      # Day 17 — VictoriaLogs MCP tool. The base URL is required only when
+      # the Day 17 tab is used; empty keeps startup (and Day 16) working.
+      VICTORIA_LOGS_BASE_URL: ${VICTORIA_LOGS_BASE_URL:-}
+      VICTORIA_LOGS_SERVICE_FIELD: ${VICTORIA_LOGS_SERVICE_FIELD:-service}
+      VICTORIA_LOGS_TIMEOUT_SECONDS: ${VICTORIA_LOGS_TIMEOUT_SECONDS:-5}
+      VICTORIA_LOGS_VERIFY_SSL: ${VICTORIA_LOGS_VERIFY_SSL:-true}
+      # Optional: path to a mounted internal CA bundle (preferred over
+      # VICTORIA_LOGS_VERIFY_SSL=false). Empty = use public trust store.
+      VICTORIA_LOGS_CA_BUNDLE: ${VICTORIA_LOGS_CA_BUNDLE:-}
     expose:
       - "8000"
     volumes:
@@ -24,6 +33,9 @@ services:
       # Persistent Agent context DB (host ./data -> /app/data); git-ignored.
       # Survives `docker compose restart` AND container recreation.
       - ./data:/app/data
+      # Internal CA bundle dir (read-only) -> /certs. Defaults to ./certs;
+      # override with VICTORIA_LOGS_CA_DIR to mount a host directory.
+      - ${VICTORIA_LOGS_CA_DIR:-./certs}:/certs:ro
     networks:
       - appnet
 

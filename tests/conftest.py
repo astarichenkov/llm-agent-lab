@@ -19,6 +19,7 @@ from app.api.routes import (
     get_day13_service,
     get_day14_service,
     get_day15_service,
+    get_day17_service,
     get_deepseek_service,
     get_mcp_client,
 )
@@ -37,7 +38,14 @@ from app.services.day12 import Day12ProfileService, ProfileStore
 from app.services.day13 import Day13TaskService, TaskStore
 from app.services.day14 import Day14InvariantService, InvariantStore
 from app.services.day15 import Day15LifecycleService, LifecycleStore
-from app.services.mcp import MCPClient
+from app.services.day17 import Day17LogsService
+from app.services.mcp import MCPClient, MCPToolCallResult
+from app.schemas.day16 import (
+    MCPServerInfo,
+    MCPStatusResponse,
+    MCPToolInfo,
+    MCPTraceStep,
+)
 from app.schemas.compare import (
     FIXED_RESPONSE_FORMAT,
     CompareRequest,
@@ -68,6 +76,9 @@ class FakeDeepSeekService:
         self.temperature_calls: list[TemperatureRequest] = []
         # Day 7: generic completions used by the Agent layer.
         self.generate_calls: list[dict] = []
+        # Day 17: scripted tool-calling completions.
+        self.generate_with_tools_calls: list[dict] = []
+        self.tool_sequence: list[dict] = []
 
     async def generate(
         self,
@@ -98,6 +109,49 @@ class FakeDeepSeekService:
             self.answer,
             "stop",
             {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+        )
+
+    async def generate_with_tools(
+        self,
+        messages: list[dict],
+        *,
+        tools: list[dict],
+        model: str | None = None,
+        temperature: float = 0.7,
+        max_tokens: int = 1024,
+        thinking: bool | None = None,
+    ) -> tuple[str, str | None, dict | None, list[dict]]:
+        """Mirror DeepSeekService.generate_with_tools using a scripted queue.
+
+        Each ``tool_sequence`` entry is a dict with optional ``content``,
+        ``finish_reason`` and ``tool_calls``. When the queue is empty a plain
+        final answer (``self.answer``) with no tool calls is returned.
+        """
+        self.generate_with_tools_calls.append(
+            {
+                "messages": [dict(m) for m in messages],
+                "tools": tools,
+                "model": model,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "thinking": thinking,
+            }
+        )
+        if self.raise_error is not None:
+            raise self.raise_error
+        if self.tool_sequence:
+            item = self.tool_sequence.pop(0)
+            return (
+                item.get("content", "") or "",
+                item.get("finish_reason", "tool_calls"),
+                {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+                item.get("tool_calls", []),
+            )
+        return (
+            self.answer,
+            "stop",
+            {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+            [],
         )
 
     async def chat(self, message: str) -> ChatResponse:
@@ -283,10 +337,85 @@ def day15_service(
     )
 
 
+class FakeMCPClient:
+    """Deterministic MCP client double for the Day 17 API tests.
+
+    The real subprocess path is covered separately by test_day17.py; here it
+    only has to report a tool list and return a canned tool result.
+    """
+
+    def __init__(
+        self,
+        *,
+        connected: bool = True,
+        error: str | None = None,
+        call_result: dict | None = None,
+    ) -> None:
+        self.connected = connected
+        self.error = error
+        self.call_result = call_result or {
+            "service": "orders-service",
+            "since_minutes": 15,
+            "level": "ERROR",
+            "query": 'service:"orders-service" AND level:"ERROR"',
+            "count": 2,
+            "limit": 100,
+            "truncated": False,
+            "logs": [],
+        }
+        self.call_tool_calls: list[tuple[str, dict]] = []
+
+    async def discover_tools(self) -> MCPStatusResponse:
+        trace = [
+            MCPTraceStep(step="initialize", status="ok", message="initialized"),
+            MCPTraceStep(step="list_tools", status="ok", message="Received 1 tools"),
+        ]
+        tools = [
+            MCPToolInfo(
+                name="search_logs",
+                description="Search recent stage logs.",
+                input_schema={
+                    "type": "object",
+                    "properties": {"service": {"type": "string"}},
+                    "required": ["service"],
+                },
+            )
+        ]
+        return MCPStatusResponse(
+            connected=self.connected,
+            server=MCPServerInfo(name="VictoriaLogs MCP", transport="stdio"),
+            tools_count=len(tools) if self.connected else 0,
+            tools=tools if self.connected else [],
+            trace=trace,
+            error=self.error,
+        )
+
+    async def call_tool(self, tool_name: str, arguments: dict):
+        self.call_tool_calls.append((tool_name, arguments))
+        return MCPToolCallResult(
+            tool=tool_name,
+            is_error=False,
+            structured=self.call_result,
+            trace=[MCPTraceStep(step="call_tool", status="ok", message="called")],
+        )
+
+
 @pytest.fixture
 def mcp_client() -> MCPClient:
     """Day 16 MCP client using the real local Demo MCP server (stdio)."""
     return MCPClient()
+
+
+@pytest.fixture
+def day17_service(
+    settings: Settings, fake_service: FakeDeepSeekService
+) -> Day17LogsService:
+    """Day 17 service backed by the fake LLM and a fake MCP client."""
+    return Day17LogsService(
+        settings,
+        deepseek=fake_service,
+        mcp_client=FakeMCPClient(),
+    )
 
 
 @pytest.fixture
@@ -309,6 +438,7 @@ def client(
     day14_service: Day14InvariantService,
     day15_service: Day15LifecycleService,
     mcp_client: MCPClient,
+    day17_service: Day17LogsService,
 ):
     """TestClient with every provider-backed service swapped for a fake."""
     app.dependency_overrides[get_settings] = lambda: settings
@@ -323,6 +453,7 @@ def client(
     app.dependency_overrides[get_day14_service] = lambda: day14_service
     app.dependency_overrides[get_day15_service] = lambda: day15_service
     app.dependency_overrides[get_mcp_client] = lambda: mcp_client
+    app.dependency_overrides[get_day17_service] = lambda: day17_service
     # Starlette 1.x re-raises handled server errors by design; the app ships
     # a global error handler, so capture its response instead.
     with TestClient(app, raise_server_exceptions=False) as test_client:

@@ -1,0 +1,109 @@
+<main class="container day17-panel" id="panel-day17">
+  <h1>Day 17 — VictoriaLogs MCP Tool</h1>
+  <p class="subtitle">
+    Агент получает запрос, <strong>сам выбирает MCP-инструмент</strong>
+    <code>search_logs</code>, backend выполняет настоящий
+    MCP <code>tools/call</code> по <code>stdio</code>, VictoriaLogs MCP server
+    обращается к VictoriaLogs HTTP API (<code>/select/logsql/query</code>),
+    а результат возвращается обратно в LLM для финального ответа.
+  </p>
+
+  <!-- 1. INPUT -->
+  <section class="preview-panel" aria-labelledby="d17-input-heading">
+    <h2 id="d17-input-heading">Запрос агенту</h2>
+    <div class="field">
+      <label for="d17-message">Сообщение</label>
+      <textarea
+        id="d17-message"
+        rows="3"
+        maxlength="2000"
+        placeholder="Покажи ERROR для orders-service за последние 15 минут"
+      >Покажи ERROR для orders-service за последние 15 минут</textarea>
+      <p class="field-hint">
+        Пошлите запрос — агент сам определит, что нужен MCP-инструмент
+        <code>search_logs</code>.
+      </p>
+    </div>
+
+    <!-- Time interval: presets + explicit date-time range + ±1h paging -->
+    <div class="d17-interval" id="d17-interval">
+      <div class="d17-interval-head">
+        <span class="d16-status-label">Интервал времени</span>
+        <span class="d17-window-label" id="d17-window-label">—</span>
+      </div>
+      <div class="d17-presets" id="d17-presets">
+        <button type="button" class="ghost-btn" data-d17-preset="30">Последние 30 минут</button>
+        <button type="button" class="ghost-btn" data-d17-preset="60">1 час</button>
+        <button type="button" class="ghost-btn" data-d17-preset="240">4 часа</button>
+        <button type="button" class="ghost-btn" data-d17-preset="480">8 часов</button>
+        <button type="button" class="ghost-btn" data-d17-preset="1440">24 часа</button>
+      </div>
+      <div class="d17-range">
+        <label class="d17-range-field">
+          <span>С</span>
+          <input type="datetime-local" id="d17-start" step="60">
+        </label>
+        <label class="d17-range-field">
+          <span>По</span>
+          <input type="datetime-local" id="d17-end" step="60">
+        </label>
+      </div>
+      <div class="actions">
+        <button type="button" class="ghost-btn" id="d17-back">← −1 час</button>
+        <button type="button" class="ghost-btn" id="d17-now">Сейчас</button>
+        <button type="button" class="ghost-btn" id="d17-forward">+1 час →</button>
+      </div>
+    </div>
+
+    <div class="actions d17-examples" id="d17-examples">
+      <button type="button" class="ghost-btn" data-d17-example="Покажи ERROR для orders-service">ERROR для orders-service</button>
+      <button type="button" class="ghost-btn" data-d17-example="Найди WARN для orders-service">WARN для orders-service</button>
+      <button type="button" class="ghost-btn" data-d17-example="Есть ли в логах orders-service сообщения содержащие timeout?">сообщения с timeout</button>
+    </div>
+
+    <div class="actions">
+      <button type="button" class="primary-btn" id="d17-send">Send</button>
+      <span class="loading hidden" id="d17-loading" role="status">Agent is working…</span>
+    </div>
+    <p id="d17-error" class="error hidden" role="alert"></p>
+  </section>
+
+  <!-- 2. ANSWER -->
+  <section class="preview-panel hidden" id="d17-answer-section" aria-labelledby="d17-answer-heading">
+    <h2 id="d17-answer-heading">Agent response</h2>
+    <div class="d17-answer" id="d17-answer"></div>
+  </section>
+
+  <!-- 3. MCP TOOL CALL -->
+  <section class="preview-panel hidden" id="d17-toolcall-section" aria-labelledby="d17-toolcall-heading">
+    <h2 id="d17-toolcall-heading">MCP Tool Call</h2>
+    <div class="d16-status-grid">
+      <div class="d16-status-item">
+        <span class="d16-status-label">Server</span>
+        <span class="d16-status-value" id="d17-toolcall-server">—</span>
+      </div>
+      <div class="d16-status-item">
+        <span class="d16-status-label">Tool</span>
+        <span class="d16-status-value" id="d17-toolcall-tool">—</span>
+      </div>
+      <div class="d16-status-item">
+        <span class="d16-status-label">Logs returned</span>
+        <span class="d16-status-value" id="d17-toolcount">0</span>
+      </div>
+    </div>
+    <p class="d16-tool-schema-label">Arguments:</p>
+    <pre class="d16-tool-schema" id="d17-toolcall-args">—</pre>
+    <p class="d16-tool-schema-label">Sample rows:</p>
+    <div class="d17-samples" id="d17-samples"></div>
+  </section>
+
+  <!-- 4. TRACE -->
+  <section class="preview-panel hidden" id="d17-trace-section" aria-labelledby="d17-trace-heading">
+    <h2 id="d17-trace-heading">MCP Trace</h2>
+    <p class="field-hint">
+      Реальные этапы выполнения: discovery → выбор инструмента LLM →
+      MCP <code>tools/call</code> → запрос к VictoriaLogs → результат в LLM.
+    </p>
+    <ol class="d16-trace" id="d17-trace" aria-live="polite"></ol>
+  </section>
+</main>

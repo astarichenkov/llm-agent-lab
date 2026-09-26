@@ -827,6 +827,71 @@ async function testDay16McpFailure() {
     store["d16-error"].textContent === "Connection closed");
 }
 
+async function testDay17AgentFlow() {
+  const ids = [
+    "panel-day17",
+    "d17-message", "d17-send", "d17-loading", "d17-error",
+    "d17-answer-section", "d17-answer",
+    "d17-toolcall-section", "d17-toolcall-server", "d17-toolcall-tool",
+    "d17-toolcount", "d17-toolcall-args", "d17-samples",
+    "d17-trace-section", "d17-trace",
+    "d17-window-label", "d17-start", "d17-end",
+    "d17-back", "d17-now", "d17-forward",
+  ];
+  const document = makeDocument(ids);
+  const payload = {
+    answer: "Найдено 2 ошибки в orders-service.",
+    tool_calls: [
+      {
+        server: "victorialogs",
+        tool: "search_logs",
+        arguments: {
+          service: "orders-service",
+          since_minutes: 30,
+          level: "ERROR",
+          limit: 10,
+        },
+        result_summary: { count: 2, limit: 10, truncated: false },
+      },
+    ],
+    trace: [
+      { step: "user_request", status: "ok", message: "Agent received user request" },
+      { step: "discover_tools", status: "ok", message: "Discovered 1 MCP tools" },
+      { step: "llm_select", status: "ok", message: "LLM selected MCP tool(s): search_logs" },
+      { step: "call_tool", status: "ok", message: "Calling MCP tool: search_logs" },
+      { step: "victorialogs_response", status: "ok", message: "VictoriaLogs returned 2 logs" },
+      { step: "llm_final", status: "ok", message: "LLM generated final answer" },
+    ],
+    error: null,
+  };
+  const fetchImpl = (url) => {
+    if (url === "/api/week4/day17/chat") return jsonResponse(payload);
+    return Promise.reject(new Error("unexpected fetch " + url));
+  };
+
+  runScript(document, fetchImpl, "day17.js");
+  await tick();
+
+  const store = document._store;
+  check("day17: send not disabled on init", store["d17-send"].disabled === false);
+
+  store["d17-message"].value = "Покажи ERROR для orders-service за 30 минут";
+  store["d17-send"]._listeners["click"][0]();
+  await tick(40);
+
+  check("day17: final answer rendered",
+    store["d17-answer"].textContent === "Найдено 2 ошибки в orders-service.");
+  check("day17: tool server rendered",
+    store["d17-toolcall-server"].textContent === "victorialogs");
+  check("day17: tool name rendered",
+    store["d17-toolcall-tool"].textContent === "search_logs");
+  check("day17: log count rendered", store["d17-toolcount"].textContent === "2");
+  check("day17: arguments rendered",
+    store["d17-toolcall-args"].textContent.indexOf('"service"') !== -1);
+  check("day17: trace rendered", store["d17-trace"].children.length === 6);
+  check("day17: no error shown", store["d17-error"].classList.contains("hidden"));
+}
+
 async function main() {
   await testDay6Metadata();
   await testDay7FullHistory();
@@ -840,6 +905,7 @@ async function main() {
   await testDay13PauseState();
   await testDay16Mcp();
   await testDay16McpFailure();
+  await testDay17AgentFlow();
 
   let failures = 0;
   results.forEach((r) => {

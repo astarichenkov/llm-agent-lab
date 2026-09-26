@@ -601,6 +601,89 @@ class DeepSeekService:
         )
         return content, finish_reason, usage
 
+    async def generate_with_tools(
+        self,
+        messages: list[dict],
+        *,
+        tools: list[dict],
+        model: str | None = None,
+        temperature: float = 0.7,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+        thinking: bool | None = None,
+    ) -> tuple[str, str | None, dict | None, list[dict]]:
+        """One Chat Completions call with OpenAI-style function tools.
+
+        Returns ``(content, finish_reason, usage, tool_calls)`` where each
+        tool call is a provider-agnostic dict::
+
+            {"id": "call_1", "name": "search_logs", "arguments": {...}}
+
+        Unlike :meth:`generate` an EMPTY ``content`` is allowed when the model
+        requested tools instead of producing text. Provider errors reuse the
+        exact same classification as :meth:`_create_completion`.
+        """
+        params: dict = {
+            "model": model or self._settings.deepseek_model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "tools": tools,
+            "tool_choice": "auto",
+        }
+        if thinking is False:
+            params["extra_body"] = {"thinking": {"type": "disabled"}}
+
+        response = await self._create_completion(params)
+
+        try:
+            choice = response.choices[0]
+            message = choice.message
+            content = message.content
+            finish_reason = choice.finish_reason
+            raw_tool_calls = getattr(message, "tool_calls", None) or []
+        except (AttributeError, IndexError, TypeError) as exc:
+            logger.warning(
+                "Malformed DeepSeek tool response structure (type=%s)",
+                type(response).__name__,
+            )
+            raise DeepSeekMalformedResponseError() from exc
+
+        tool_calls: list[dict] = []
+        for index, call in enumerate(raw_tool_calls):
+            function = getattr(call, "function", None)
+            name = getattr(function, "name", None)
+            raw_args = getattr(function, "arguments", None)
+            arguments: dict = {}
+            if raw_args:
+                try:
+                    parsed = json.loads(raw_args)
+                    if isinstance(parsed, dict):
+                        arguments = parsed
+                except (json.JSONDecodeError, TypeError):
+                    arguments = {}
+            tool_calls.append(
+                {
+                    "id": getattr(call, "id", None) or f"call_{index}",
+                    "name": name or "",
+                    "arguments": arguments,
+                }
+            )
+
+        if not tool_calls and (content is None or not content.strip()):
+            if finish_reason == "length":
+                raise DeepSeekOutputLimitError() from None
+            raise DeepSeekMalformedResponseError() from None
+
+        logger.info(
+            "DeepSeek tool call completed model=%s finish_reason=%s "
+            "tool_calls=%s content_length=%s",
+            model or self._settings.deepseek_model,
+            finish_reason,
+            len(tool_calls),
+            len(content or ""),
+        )
+        return content, finish_reason, self._extract_usage(response), tool_calls
+
     async def _call(
         self,
         messages: list[dict[str, str]],
@@ -638,49 +721,7 @@ class DeepSeekService:
         if extra_body:
             params["extra_body"] = extra_body
 
-        try:
-            response = await self._client.chat.completions.create(**params)
-        except AuthenticationError as exc:
-            logger.warning("DeepSeek auth error (type=%s)", type(exc).__name__)
-            raise DeepSeekAuthenticationError() from exc
-        except RateLimitError as exc:
-            logger.warning("DeepSeek rate limit (type=%s)", type(exc).__name__)
-            raise DeepSeekRateLimitError() from exc
-        except APITimeoutError as exc:
-            logger.warning("DeepSeek timeout (type=%s)", type(exc).__name__)
-            raise DeepSeekTimeoutError() from exc
-        except APIConnectionError as exc:
-            logger.warning("DeepSeek connection error (type=%s)", type(exc).__name__)
-            raise DeepSeekNetworkError() from exc
-        except APIError as exc:
-            status = getattr(exc, "status_code", None)
-            provider_message = self._safe_provider_message(exc)
-            logger.warning(
-                "DeepSeek API error (type=%s, status=%s, provider_message=%s)",
-                type(exc).__name__,
-                status if status is not None else "?",
-                provider_message,
-            )
-            # A 400/422 from the provider means the REQUEST itself was
-            # rejected (e.g. the prompt exceeded the model context window).
-            # Surface the provider's own wording so the real cause is visible
-            # instead of a generic 502. No secrets are included here.
-            if status in (400, 422):
-                raise DeepSeekInvalidRequestError(
-                    provider_message or "DeepSeek rejected the request as invalid.",
-                    status,
-                ) from exc
-            raise DeepSeekError(
-                "The DeepSeek API reported an error. Please try again.",
-                status if status in (402, 500, 503) else 502,
-            ) from exc
-        except Exception as exc:  # pragma: no cover - defensive catch-all
-            logger.exception(
-                "Unexpected DeepSeek client error (type=%s)", type(exc).__name__
-            )
-            raise DeepSeekError(
-                "An unexpected error occurred while contacting DeepSeek.", 500
-            ) from exc
+        response = await self._create_completion(params)
 
         # Validate the shape of the provider response before using it.
         try:
@@ -734,6 +775,56 @@ class DeepSeekService:
             raise DeepSeekMalformedResponseError() from None
 
         return content.strip(), finish_reason, self._extract_usage(response)
+
+    async def _create_completion(self, params: dict):
+        """Run one Chat Completions call with classified error handling.
+
+        Extracted so the plain-text and tool-calling code paths share the
+        EXACT same provider error mapping (no duplicated/diverging handling).
+        """
+        try:
+            return await self._client.chat.completions.create(**params)
+        except AuthenticationError as exc:
+            logger.warning("DeepSeek auth error (type=%s)", type(exc).__name__)
+            raise DeepSeekAuthenticationError() from exc
+        except RateLimitError as exc:
+            logger.warning("DeepSeek rate limit (type=%s)", type(exc).__name__)
+            raise DeepSeekRateLimitError() from exc
+        except APITimeoutError as exc:
+            logger.warning("DeepSeek timeout (type=%s)", type(exc).__name__)
+            raise DeepSeekTimeoutError() from exc
+        except APIConnectionError as exc:
+            logger.warning("DeepSeek connection error (type=%s)", type(exc).__name__)
+            raise DeepSeekNetworkError() from exc
+        except APIError as exc:
+            status = getattr(exc, "status_code", None)
+            provider_message = self._safe_provider_message(exc)
+            logger.warning(
+                "DeepSeek API error (type=%s, status=%s, provider_message=%s)",
+                type(exc).__name__,
+                status if status is not None else "?",
+                provider_message,
+            )
+            # A 400/422 from the provider means the REQUEST itself was
+            # rejected (e.g. the prompt exceeded the model context window).
+            # Surface the provider's own wording so the real cause is visible
+            # instead of a generic 502. No secrets are included here.
+            if status in (400, 422):
+                raise DeepSeekInvalidRequestError(
+                    provider_message or "DeepSeek rejected the request as invalid.",
+                    status,
+                ) from exc
+            raise DeepSeekError(
+                "The DeepSeek API reported an error. Please try again.",
+                status if status in (402, 500, 503) else 502,
+            ) from exc
+        except Exception as exc:  # pragma: no cover - defensive catch-all
+            logger.exception(
+                "Unexpected DeepSeek client error (type=%s)", type(exc).__name__
+            )
+            raise DeepSeekError(
+                "An unexpected error occurred while contacting DeepSeek.", 500
+            ) from exc
 
     @staticmethod
     def _safe_provider_message(exc) -> str | None:

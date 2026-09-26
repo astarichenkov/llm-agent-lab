@@ -40,6 +40,8 @@ from app.services.day13 import Day13TaskService, TaskStateError
 from app.services.day14 import Day14InvariantService
 from app.services.day15 import Day15Error, Day15LifecycleService
 from app.services.mcp import MCPClient
+from app.services.day17 import Day17LogsService
+from app.schemas.day17 import Day17ChatRequest, Day17ChatResponse
 from app.schemas.day13 import (
     Day13ChatRequest,
     Day13ChatResponse,
@@ -240,6 +242,17 @@ def get_mcp_client(request: Request) -> MCPClient:
     deliberately broken server.
     """
     return request.app.state.mcp_client
+
+
+def get_day17_service(request: Request) -> Day17LogsService:
+    """Return the process-wide Day 17 VictoriaLogs MCP agent service.
+
+    The service owns the tool-calling loop: it discovers the real MCP tools,
+    exposes them to the LLM, performs ``MCPClient.call_tool`` and returns the
+    final answer plus a real execution trace. Tests override this dependency
+    to inject a fake LLM and a fake/mock MCP client.
+    """
+    return request.app.state.day17_service
 
 
 def _agent_info(agent: Agent, settings: Settings) -> AgentInfo:
@@ -1420,3 +1433,21 @@ async def day16_mcp_status(
     exposed to the client.
     """
     return await client.discover_tools()
+
+
+# ----------------------------------------------------------------------
+# Day 17 — VictoriaLogs MCP tool + agent tool-calling flow
+# ----------------------------------------------------------------------
+@router.post("/api/week4/day17/chat", response_model=Day17ChatResponse)
+async def day17_chat(
+    payload: Day17ChatRequest,
+    service: Day17LogsService = Depends(get_day17_service),
+) -> Day17ChatResponse:
+    """Run one agent turn that really calls the VictoriaLogs MCP tool.
+
+    The LLM decides (via function calling) to invoke ``search_logs``; the
+    backend then performs a real MCP ``tools/call`` over ``stdio`` and feeds
+    the result back to the model for the final answer. When the UI supplied an
+    explicit ``start``/``end`` window it is enforced on the tool call.
+    """
+    return await service.chat(payload.message, start=payload.start, end=payload.end)

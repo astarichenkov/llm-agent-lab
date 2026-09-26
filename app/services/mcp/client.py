@@ -14,13 +14,19 @@ contacted and no credentials are required.
 """
 from __future__ import annotations
 
+import json
 import sys
 from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
+from typing import Any
 
 from mcp import ClientSession
-from mcp.client.stdio import StdioServerParameters, stdio_client
+from mcp.client.stdio import (
+    StdioServerParameters,
+    get_default_environment,
+    stdio_client,
+)
 
 from app.schemas.day16 import (
     MCPServerInfo,
@@ -44,6 +50,10 @@ class MCPServerConfig:
     cwd: str | None = None
     # Human-readable name shown before the initialize handshake completes.
     name: str = "Week 4 Demo MCP"
+    # Extra environment variables for the subprocess. The MCP SDK only
+    # inherits a safe allow-list of variables by default, so anything the
+    # server needs (e.g. VICTORIA_LOGS_BASE_URL) MUST be passed explicitly.
+    env: dict[str, str] | None = None
 
 
 def default_server_config() -> MCPServerConfig:
@@ -53,6 +63,60 @@ def default_server_config() -> MCPServerConfig:
         args=["-m", "app.services.mcp.demo_server"],
         cwd=str(PROJECT_ROOT),
     )
+
+
+def victorialogs_server_config(
+    env: dict[str, str] | None = None,
+) -> MCPServerConfig:
+    """Launch the Day 17 VictoriaLogs MCP server with an explicit env.
+
+    The MCP stdio transport only inherits a small allow-list of environment
+    variables, so ``VICTORIA_LOGS_*`` must be forwarded explicitly. The
+    allow-list is merged first so the child interpreter still has PATH etc.
+    """
+    merged = get_default_environment()
+    if env:
+        merged.update(env)
+    return MCPServerConfig(
+        command=sys.executable,
+        args=["-m", "app.services.mcp.victorialogs.server"],
+        cwd=str(PROJECT_ROOT),
+        name="VictoriaLogs MCP",
+        env=merged,
+    )
+
+
+@dataclass
+class MCPToolCallResult:
+    """Normalized outcome of one MCP ``tools/call`` request."""
+
+    tool: str
+    is_error: bool
+    structured: dict[str, Any] | None = None
+    text: str = ""
+    trace: list[MCPTraceStep] = field(default_factory=list)
+    error: str | None = None
+
+    def as_payload(self) -> dict[str, Any]:
+        """Return the tool result in the shape handed to the LLM.
+
+        Prefer the structured result (FastMCP returns one for typed tools);
+        otherwise parse the text content as JSON, and finally fall back to a
+        plain ``{"text": ...}`` wrapper.
+        """
+        if self.structured is not None:
+            return self.structured
+        if self.text:
+            try:
+                parsed = json.loads(self.text)
+                if isinstance(parsed, dict):
+                    return parsed
+            except json.JSONDecodeError:
+                pass
+            return {"text": self.text}
+        if self.error:
+            return {"error": self.error}
+        return {}
 
 
 def _flatten_error(exc: BaseException) -> str:
@@ -101,6 +165,7 @@ class MCPClient:
             command=self.config.command,
             args=list(self.config.args),
             cwd=self.config.cwd,
+            env=self.config.env,
         )
         read_timeout = timedelta(seconds=self.timeout_seconds)
 
@@ -164,4 +229,72 @@ class MCPClient:
                 tools=[],
                 trace=trace,
                 error=message,
+            )
+
+    async def call_tool(
+        self,
+        tool_name: str,
+        arguments: dict[str, Any],
+    ) -> MCPToolCallResult:
+        """Really call an MCP tool over a fresh stdio session.
+
+        Spawns the server subprocess, runs the ``initialize`` handshake and
+        sends ``tools/call``. Connection/protocol failures are returned as a
+        controlled ``is_error=True`` result (no stack trace escapes).
+        """
+        trace: list[MCPTraceStep] = []
+
+        def add(step: str, status: str, message: str) -> None:
+            trace.append(MCPTraceStep(step=step, status=status, message=message))
+
+        command_line = " ".join([self.config.command, *self.config.args])
+        add("start_server", "ok", f"Starting MCP server: {command_line}")
+        add("call_tool", "ok", f"Calling MCP tool: {tool_name}")
+
+        params = StdioServerParameters(
+            command=self.config.command,
+            args=list(self.config.args),
+            cwd=self.config.cwd,
+            env=self.config.env,
+        )
+        read_timeout = timedelta(seconds=self.timeout_seconds)
+
+        try:
+            async with stdio_client(params) as (read_stream, write_stream):
+                add("connect", "ok", "Connected via stdio")
+                async with ClientSession(
+                    read_stream, write_stream, read_timeout_seconds=read_timeout
+                ) as session:
+                    await session.initialize()
+                    add("initialize", "ok", "MCP session initialized")
+                    result = await session.call_tool(tool_name, arguments)
+            add("result", "ok", f"MCP tool returned: {tool_name}")
+            add("closed", "ok", "Connection closed")
+
+            structured = getattr(result, "structuredContent", None)
+            text_parts: list[str] = []
+            for item in getattr(result, "content", None) or []:
+                text = getattr(item, "text", None)
+                if text:
+                    text_parts.append(text)
+            text = "\n".join(text_parts)
+            return MCPToolCallResult(
+                tool=tool_name,
+                is_error=bool(getattr(result, "isError", False)),
+                structured=structured if isinstance(structured, dict) else None,
+                text=text,
+                trace=trace,
+                error="Tool reported an error" if getattr(result, "isError", False) else None,
+            )
+        except BaseExceptionGroup as exc:  # anyio task-group failures
+            message = _flatten_error(exc)
+            add("error", "error", message)
+            return MCPToolCallResult(
+                tool=tool_name, is_error=True, trace=trace, error=message
+            )
+        except Exception as exc:
+            message = _flatten_error(exc)
+            add("error", "error", message)
+            return MCPToolCallResult(
+                tool=tool_name, is_error=True, trace=trace, error=message
             )

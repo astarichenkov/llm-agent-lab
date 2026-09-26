@@ -167,8 +167,10 @@ tool list.
 7. (Optional) point at `app/services/mcp/demo_server.py` to show where the
    tools are registered.
 
-## Out of scope (Days 17–20)
+## Out of scope (Days 18–20)
 
-Not implemented yet: VictoriaLogs MCP server, scheduler/periodic monitoring,
-tool composition and multi-server orchestration. Days 17–20 are shown as
-disabled "Coming next" tabs on purpose.
+Day 17 (VictoriaLogs MCP server + agent tool calling) is implemented in
+`docs/week4/day17.md`. Still not implemented: scheduler/periodic monitoring,
+SQLite persistence, background jobs, reports, `analyze_logs` / `save_report`,
+GitLab MCP and multi-server orchestration. Days 18–20 are shown as disabled
+"Coming next" tabs on purpose.
