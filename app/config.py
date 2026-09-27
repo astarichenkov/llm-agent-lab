@@ -121,6 +121,18 @@ class Settings(BaseSettings):
     # bundle (PEM) that validates the VictoriaLogs certificate.
     victoria_logs_ca_bundle: str = ""
 
+    # Day 18 — scheduled monitoring. Jobs and run aggregates are stored in
+    # this SQLite database (created lazily on first use). The directory is
+    # bind-mounted in Docker (./data -> /app/data), so the DB survives
+    # restarts and container recreation.
+    day18_monitoring_db_path: str = "data/day18/monitoring.db"
+
+    # Day 19 — MCP tool-composition pipeline. Every generated report lives
+    # under this single root (git-ignored ``data/``). The run id is always
+    # validated and the resolved directory must stay inside the root, so a
+    # caller can never choose an arbitrary filesystem path.
+    day19_artifact_root: str = "data/day19/runs"
+
     @property
     def has_deepseek_api_key(self) -> bool:
         """True when a real key was provided via the environment."""

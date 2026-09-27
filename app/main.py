@@ -1,4 +1,5 @@
 """FastAPI application factory and entry point."""
+from contextlib import asynccontextmanager
 import logging
 import os
 import sys
@@ -21,6 +22,8 @@ from app.services.day13 import Day13TaskService
 from app.services.day14 import Day14InvariantService
 from app.services.day15 import Day15LifecycleService
 from app.services.day17 import Day17LogsService
+from app.services.day18 import Day18MonitoringAgentService, MonitoringService
+from app.services.day19 import Day19PipelineService
 from app.services.mcp import MCPClient
 
 LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s %(message)s"
@@ -77,6 +80,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     resolved = settings or get_settings()
     configure_logging(resolved.app_log_file)
 
+    # Day 18 services are constructed here (cheap; SQLite is opened lazily).
+    # The scheduler itself is started/stopped by the application lifespan so
+    # it always matches the FastAPI process lifecycle.
+    monitoring_service = MonitoringService(resolved)
+    day18_service = Day18MonitoringAgentService(resolved, monitoring_service)
+
+    @asynccontextmanager
+    async def lifespan(application: FastAPI):
+        """Start the monitoring scheduler and restore active jobs."""
+        service: MonitoringService = application.state.monitoring_service
+        service.start_scheduler()
+        try:
+            service.restore_active_jobs()
+        except Exception:  # noqa: BLE001 - recovery must not block startup
+            logger.exception("Day 18: failed to restore active monitoring jobs")
+        try:
+            yield
+        finally:
+            service.shutdown_scheduler()
+
     app = FastAPI(
         title=resolved.app_name,
         description=(
@@ -84,6 +107,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "with cloud LLM APIs and persistent, multi-agent dialog context."
         ),
         version="1.0.0",
+        lifespan=lifespan,
     )
     app.state.settings = resolved
     app.state.agent_manager = AgentManager.for_settings(resolved)
@@ -105,6 +129,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # request is actually made, so a missing VICTORIA_LOGS_BASE_URL never
     # breaks startup or Day 16.
     app.state.day17_service = Day17LogsService(resolved)
+    # Day 18 — scheduled monitoring. The service owns the SQLite repository
+    # and the scheduler; the agent service exposes the monitoring MCP tools
+    # to the LLM only when the Day 18 tab is used.
+    app.state.monitoring_service = monitoring_service
+    app.state.day18_service = day18_service
+    # Day 19 — MCP tool composition pipeline. Constructing the service does
+    # NOT contact VictoriaLogs or the LLM: both are reached lazily when a
+    # pipeline request is actually made.
+    app.state.day19_service = Day19PipelineService(resolved)
 
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
     app.include_router(router)

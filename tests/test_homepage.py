@@ -480,8 +480,8 @@ def test_days_1_to_5_are_hidden_from_navigation(client):
     for hidden in ("day2", "day3", "day4", "day5"):
         assert f'"{hidden}"' in main_tabs
     assert '"day16"' in main_tabs
-    # default landing tab is the current module (Day 16)
-    assert 'switchMainTab("day16")' in app_js
+    # default landing tab is the current module (Day 18)
+    assert 'switchMainTab("day18")' in app_js
 
 
 def test_days_6_to_10_are_hidden_from_navigation(client):

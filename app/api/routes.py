@@ -1,8 +1,8 @@
 """HTTP routes: homepage, health check, chat API and comparison API."""
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.templating import Jinja2Templates
 
 from app.config import Settings, get_settings
@@ -41,6 +41,24 @@ from app.services.day14 import Day14InvariantService
 from app.services.day15 import Day15Error, Day15LifecycleService
 from app.services.mcp import MCPClient
 from app.services.day17 import Day17LogsService
+from app.services.day18 import Day18MonitoringAgentService, MonitoringService
+from app.services.day19 import Day19PipelineService, ArtifactError
+from app.schemas.day19 import (
+    Day19PipelineRequest,
+    Day19PipelineResponse,
+)
+from app.schemas.day18 import (
+    DEFAULT_SUMMARY_RUNS,
+    Day18ChatRequest,
+    Day18ChatResponse,
+    MonitoringJob,
+    MonitoringRunListResponse,
+    MonitoringStatusResponse,
+    MonitoringSummaryResponse,
+    StartMonitoringInput,
+    StartMonitoringResult,
+    StopMonitoringResult,
+)
 from app.schemas.day17 import Day17ChatRequest, Day17ChatResponse
 from app.schemas.day13 import (
     Day13ChatRequest,
@@ -253,6 +271,35 @@ def get_day17_service(request: Request) -> Day17LogsService:
     to inject a fake LLM and a fake/mock MCP client.
     """
     return request.app.state.day17_service
+
+
+def get_monitoring_service(request: Request) -> MonitoringService:
+    """Return the process-wide Day 18 monitoring service.
+
+    Owns the SQLite repository and the scheduler. Tests override this
+    dependency to inject a service backed by a fake VictoriaLogs client and a
+    temporary database.
+    """
+    return request.app.state.monitoring_service
+
+
+def get_day18_service(request: Request) -> Day18MonitoringAgentService:
+    """Return the process-wide Day 18 monitoring agent service.
+
+    Exposes ONLY the monitoring MCP tools to the LLM; the scheduled runs are
+    deterministic and never call the model.
+    """
+    return request.app.state.day18_service
+
+
+def get_day19_service(request: Request) -> Day19PipelineService:
+    """Return the process-wide Day 19 pipeline service.
+
+    Owns the dedicated Pipeline MCP server/client and runs the deterministic
+    ``search_logs -> analyze_logs -> save_report`` chain. Tests override this
+    dependency to inject a fake VictoriaLogs client and a fake LLM.
+    """
+    return request.app.state.day19_service
 
 
 def _agent_info(agent: Agent, settings: Settings) -> AgentInfo:
@@ -1451,3 +1498,165 @@ async def day17_chat(
     explicit ``start``/``end`` window it is enforced on the tool call.
     """
     return await service.chat(payload.message, start=payload.start, end=payload.end)
+
+
+# ----------------------------------------------------------------------
+# Day 18 — scheduled monitoring
+# ----------------------------------------------------------------------
+@router.post(
+    "/api/week4/day18/monitoring",
+    response_model=StartMonitoringResult,
+)
+async def day18_start_monitoring(
+    payload: StartMonitoringInput,
+    service: MonitoringService = Depends(get_monitoring_service),
+) -> StartMonitoringResult:
+    """Start a recurring monitoring job (validated interval whitelist).
+
+    The job is persisted to SQLite, executed once IMMEDIATELY (so the
+    dashboard shows a result without waiting) and then registered in the
+    application scheduler.
+    """
+    return await service.start_job(payload)
+
+
+@router.get(
+    "/api/week4/day18/monitoring",
+    response_model=list[MonitoringJob],
+)
+async def day18_list_monitoring_jobs(
+    service: MonitoringService = Depends(get_monitoring_service),
+) -> list[MonitoringJob]:
+    """List every monitoring job (newest first), for the dashboard."""
+    return service.list_jobs()
+
+
+@router.get(
+    "/api/week4/day18/monitoring/{job_id}",
+    response_model=MonitoringStatusResponse,
+)
+async def day18_monitoring_status(
+    job_id: str,
+    service: MonitoringService = Depends(get_monitoring_service),
+) -> MonitoringStatusResponse:
+    """Return the current status of one monitoring job."""
+    status = service.get_status(job_id)
+    if status is None:
+        raise HTTPException(
+            status_code=404, detail=f"unknown monitoring job: {job_id}"
+        )
+    return status
+
+
+@router.get(
+    "/api/week4/day18/monitoring/{job_id}/runs",
+    response_model=MonitoringRunListResponse,
+)
+async def day18_monitoring_runs(
+    job_id: str,
+    limit: int = Query(default=20, ge=1, le=100),
+    service: MonitoringService = Depends(get_monitoring_service),
+) -> MonitoringRunListResponse:
+    """Return the run history (aggregates only, newest first)."""
+    if service.get_job(job_id) is None:
+        raise HTTPException(
+            status_code=404, detail=f"unknown monitoring job: {job_id}"
+        )
+    return MonitoringRunListResponse(
+        job_id=job_id, runs=service.list_runs(job_id, limit=limit)
+    )
+
+
+@router.get(
+    "/api/week4/day18/monitoring/{job_id}/summary",
+    response_model=MonitoringSummaryResponse,
+)
+async def day18_monitoring_summary(
+    job_id: str,
+    last_runs: int = Query(default=DEFAULT_SUMMARY_RUNS, ge=1, le=100),
+    service: MonitoringService = Depends(get_monitoring_service),
+) -> MonitoringSummaryResponse:
+    """Return the backend-computed aggregate summary for one job."""
+    summary = service.get_summary(job_id, last_runs=last_runs)
+    if summary is None:
+        raise HTTPException(
+            status_code=404, detail=f"unknown monitoring job: {job_id}"
+        )
+    return summary
+
+
+@router.post(
+    "/api/week4/day18/monitoring/{job_id}/stop",
+    response_model=StopMonitoringResult,
+)
+async def day18_stop_monitoring(
+    job_id: str,
+    service: MonitoringService = Depends(get_monitoring_service),
+) -> StopMonitoringResult:
+    """Stop a monitoring job (idempotent) and keep its run history."""
+    result = service.stop_job(job_id)
+    if result is None:
+        raise HTTPException(
+            status_code=404, detail=f"unknown monitoring job: {job_id}"
+        )
+    return result
+
+
+@router.post("/api/week4/day18/chat", response_model=Day18ChatResponse)
+async def day18_chat(
+    payload: Day18ChatRequest,
+    service: Day18MonitoringAgentService = Depends(get_day18_service),
+) -> Day18ChatResponse:
+    """Run one agent turn that really calls the monitoring MCP tools.
+
+    The LLM sees ONLY the four Day 18 monitoring tools and selects one via
+    function calling; the backend performs a real MCP ``tools/call`` over the
+    in-memory transport and feeds the result back to the model.
+    """
+    return await service.chat(payload.message)
+
+
+# ----------------------------------------------------------------------
+# Day 19 — MCP tool composition pipeline (search -> analyze -> save)
+# ----------------------------------------------------------------------
+@router.post(
+    "/api/week4/day19/pipeline",
+    response_model=Day19PipelineResponse,
+)
+async def day19_pipeline(
+    payload: Day19PipelineRequest,
+    service: Day19PipelineService = Depends(get_day19_service),
+) -> Day19PipelineResponse:
+    """Run the automatic ``search_logs -> analyze_logs -> save_report`` chain.
+
+    The backend performs three REAL MCP ``tools/call`` requests against the
+    dedicated Day 19 Pipeline MCP server and passes the actual sanitized
+    search result into ``analyze_logs`` and the actual structured analysis
+    into ``save_report``. A failure in one step stops the following steps and
+    is returned as a controlled ``status=failed`` response.
+    """
+    return await service.run(payload)
+
+
+@router.get("/api/week4/day19/runs/{run_id}/artifacts/{filename}")
+async def day19_artifact(
+    run_id: str,
+    filename: str,
+    service: Day19PipelineService = Depends(get_day19_service),
+) -> PlainTextResponse:
+    """Serve ONE known Day 19 artifact, safely constrained to the run root.
+
+    ``run_id`` and ``filename`` are validated by the artifact store; unknown
+    names, traversal and paths outside ``data/day19/runs`` are rejected.
+    """
+    try:
+        content = service.read_artifact(run_id, filename)
+    except ArtifactError as exc:
+        raise HTTPException(status_code=404, detail=exc.message) from exc
+    if filename.endswith(".json"):
+        media_type = "application/json"
+    elif filename.endswith(".md"):
+        media_type = "text/markdown"
+    else:
+        media_type = "application/x-ndjson"
+    return PlainTextResponse(content, media_type=media_type)

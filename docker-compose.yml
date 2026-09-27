@@ -25,6 +25,8 @@ services:
       # Optional: path to a mounted internal CA bundle (preferred over
       # VICTORIA_LOGS_VERIFY_SSL=false). Empty = use public trust store.
       VICTORIA_LOGS_CA_BUNDLE: ${VICTORIA_LOGS_CA_BUNDLE:-}
+      # Day 18 — scheduled monitoring SQLite DB (persisted under ./data).
+      DAY18_MONITORING_DB_PATH: ${DAY18_MONITORING_DB_PATH:-data/day18/monitoring.db}
     expose:
       - "8000"
     volumes:

@@ -1,0 +1,210 @@
+<main class="container day18-panel" id="panel-day18">
+  <h1>Day 18 — Scheduled Monitoring</h1>
+  <p class="subtitle">
+    Пользователь (или агент через MCP) создаёт monitoring job для stage-логов
+    VictoriaLogs. Долгоживущий <strong>scheduler</strong> в приложении
+    периодически выполняет детерминированный сбор данных (без LLM),
+    результаты-агрегаты сохраняются в <strong>SQLite</strong>, а дашборд
+    показывает историю запусков и сводку.
+  </p>
+
+  <!-- 0. AGENT (MCP monitoring tools) -->
+  <section class="preview-panel" id="d18-agent-section" aria-labelledby="d18-agent-heading">
+    <h2 id="d18-agent-heading">Agent request (monitoring MCP tools)</h2>
+    <div class="field">
+      <label for="d18-agent-message">Сообщение агенту</label>
+      <textarea
+        id="d18-agent-message"
+        rows="2"
+        maxlength="2000"
+        placeholder="Начни мониторить ERROR для application каждые 30 секунд"
+      >Начни мониторить ERROR для application каждые 30 секунд</textarea>
+      <p class="field-hint">
+        LLM видит только Day 18 monitoring-tools и сам выбирает
+        <code>start_monitoring</code> / <code>get_monitoring_summary</code> /
+        <code>stop_monitoring</code>; backend выполняет настоящий MCP
+        <code>tools/call</code>.
+      </p>
+    </div>
+    <div class="actions">
+      <button type="button" class="primary-btn" id="d18-agent-send">Send</button>
+      <span class="loading hidden" id="d18-agent-loading" role="status">Agent is working…</span>
+    </div>
+    <p id="d18-error" class="error hidden" role="alert"></p>
+  </section>
+
+  <!-- 1. AGENT ANSWER -->
+  <section class="preview-panel hidden" id="d18-answer-section" aria-labelledby="d18-answer-heading">
+    <h2 id="d18-answer-heading">Agent response</h2>
+    <div class="d17-answer" id="d18-answer"></div>
+  </section>
+
+  <!-- 2. MCP TOOL CALL -->
+  <section class="preview-panel hidden" id="d18-toolcall-section" aria-labelledby="d18-toolcall-heading">
+    <h2 id="d18-toolcall-heading">MCP Tool Call</h2>
+    <div class="d16-status-grid">
+      <div class="d16-status-item">
+        <span class="d16-status-label">Server</span>
+        <span class="d16-status-value" id="d18-toolcall-server">—</span>
+      </div>
+      <div class="d16-status-item">
+        <span class="d16-status-label">Tool</span>
+        <span class="d16-status-value" id="d18-toolcall-tool">—</span>
+      </div>
+      <div class="d16-status-item">
+        <span class="d16-status-label">Job ID</span>
+        <span class="d16-status-value" id="d18-toolcall-jobid">—</span>
+      </div>
+    </div>
+    <p class="d16-tool-schema-label">Arguments:</p>
+    <pre class="d16-tool-schema" id="d18-toolcall-args">—</pre>
+  </section>
+
+  <!-- 3. START FORM -->
+  <section class="preview-panel" id="d18-form-section" aria-labelledby="d18-form-heading">
+    <h2 id="d18-form-heading">Start monitoring</h2>
+    <div class="d18-form-grid">
+      <label class="d18-field">
+        <span>Service</span>
+        <input type="text" id="d18-service" maxlength="200" value="application">
+      </label>
+      <label class="d18-field">
+        <span>Level</span>
+        <select id="d18-level">
+          <option value="">ANY</option>
+          <option value="ERROR" selected>ERROR</option>
+          <option value="WARN">WARN</option>
+          <option value="INFO">INFO</option>
+        </select>
+      </label>
+      <label class="d18-field">
+        <span>Interval</span>
+        <select id="d18-interval">
+          <option value="10">10 sec</option>
+          <option value="30" selected>30 sec</option>
+          <option value="60">1 min</option>
+          <option value="300">5 min</option>
+          <option value="600">10 min</option>
+          <option value="1800">30 min</option>
+          <option value="3600">1 hour</option>
+        </select>
+      </label>
+      <label class="d18-field">
+        <span>Lookback</span>
+        <select id="d18-lookback">
+          <option value="1">1 min</option>
+          <option value="5" selected>5 min</option>
+          <option value="10">10 min</option>
+          <option value="15">15 min</option>
+          <option value="30">30 min</option>
+          <option value="60">1 hour</option>
+        </select>
+      </label>
+      <label class="d18-field">
+        <span>Limit</span>
+        <input type="number" id="d18-limit" min="1" max="500" value="100">
+      </label>
+      <label class="d18-field">
+        <span>Text contains (optional)</span>
+        <input type="text" id="d18-text" maxlength="200" placeholder="">
+      </label>
+    </div>
+    <p class="field-hint">
+      <strong>Interval</strong> — как часто выполняется проверка.
+      <strong>Lookback</strong> — за какой период VictoriaLogs ищет записи при
+      каждом запуске. Это независимые параметры; окна могут перекрываться.
+      Короткие интервалы (10 / 30 sec, 1 min) предназначены для
+      демонстрации — для обычного мониторинга выбирайте более длинные.
+    </p>
+    <div class="actions">
+      <button type="button" class="primary-btn" id="d18-start">Start monitoring</button>
+      <span class="loading hidden" id="d18-loading" role="status">Starting…</span>
+    </div>
+  </section>
+
+  <!-- 4. ACTIVE JOB CARD -->
+  <section class="preview-panel hidden" id="d18-job-section" aria-labelledby="d18-job-heading">
+    <h2 id="d18-job-heading">
+      Monitoring <span class="d18-job-id" id="d18-job-id">—</span>
+      <span class="d18-badge" id="d18-job-status">—</span>
+    </h2>
+    <div class="d16-status-grid">
+      <div class="d16-status-item">
+        <span class="d16-status-label">Service</span>
+        <span class="d16-status-value" id="d18-job-service">—</span>
+      </div>
+      <div class="d16-status-item">
+        <span class="d16-status-label">Level</span>
+        <span class="d16-status-value" id="d18-job-level">—</span>
+      </div>
+      <div class="d16-status-item">
+        <span class="d16-status-label">Interval</span>
+        <span class="d16-status-value" id="d18-job-interval">—</span>
+      </div>
+      <div class="d16-status-item">
+        <span class="d16-status-label">Lookback</span>
+        <span class="d16-status-value" id="d18-job-lookback">—</span>
+      </div>
+      <div class="d16-status-item">
+        <span class="d16-status-label">Runs</span>
+        <span class="d16-status-value" id="d18-job-runs">0</span>
+      </div>
+      <div class="d16-status-item">
+        <span class="d16-status-label">Last run</span>
+        <span class="d16-status-value" id="d18-job-last">—</span>
+      </div>
+      <div class="d16-status-item">
+        <span class="d16-status-label">Next run</span>
+        <span class="d16-status-value" id="d18-job-next">—</span>
+      </div>
+    </div>
+    <div class="actions">
+      <button type="button" class="ghost-btn" id="d18-refresh">Refresh</button>
+      <button type="button" class="ghost-btn" id="d18-stop">Stop</button>
+    </div>
+  </section>
+
+  <!-- 5. SUMMARY -->
+  <section class="preview-panel hidden" id="d18-summary-section" aria-labelledby="d18-summary-heading">
+    <h2 id="d18-summary-heading">Summary</h2>
+    <div class="d18-summary-grid">
+      <div class="d18-summary-item"><span>Runs</span><b id="d18-sum-runs">0</b></div>
+      <div class="d18-summary-item"><span>Successful</span><b id="d18-sum-success">0</b></div>
+      <div class="d18-summary-item"><span>Failed</span><b id="d18-sum-failed">0</b></div>
+      <div class="d18-summary-item"><span>Total logs</span><b id="d18-sum-total">0</b></div>
+      <div class="d18-summary-item"><span>Average/run</span><b id="d18-sum-avg">0</b></div>
+      <div class="d18-summary-item"><span>Max/run</span><b id="d18-sum-max">0</b></div>
+      <div class="d18-summary-item"><span>Last run</span><b id="d18-sum-last">0</b></div>
+      <div class="d18-summary-item"><span>Trend</span><b id="d18-sum-trend">stable</b></div>
+    </div>
+    <p class="field-hint">Агрегаты считает backend; в SQLite хранятся только метрики, без сырых stage-логов.</p>
+  </section>
+
+  <!-- 6. RUN HISTORY -->
+  <section class="preview-panel hidden" id="d18-runs-section" aria-labelledby="d18-runs-heading">
+    <h2 id="d18-runs-heading">Recent runs</h2>
+    <table class="d18-runs">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Time</th>
+          <th>Logs</th>
+          <th>Duration</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="d18-runs-body"></tbody>
+    </table>
+  </section>
+
+  <!-- 7. AGENT / MCP TRACE -->
+  <section class="preview-panel hidden" id="d18-trace-section" aria-labelledby="d18-trace-heading">
+    <h2 id="d18-trace-heading">Monitoring trace</h2>
+    <p class="field-hint">
+      Agent / MCP trace отделён от scheduled runs: здесь показан путь
+      LLM → MCP tool selection → <code>tools/call</code> → job persisted →
+      scheduler registered. Фоновые запуски — в таблице Recent runs.
+    </p>
+    <ol class="d16-trace" id="d18-trace" aria-live="polite"></ol>
+  </section>
+</main>

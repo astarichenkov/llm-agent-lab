@@ -688,12 +688,12 @@ def test_week4_day17_enabled_and_future_days_disabled(client) -> None:
 
     day17 = re.search(r'<button[^>]*id="tab-day17"[^>]*>', html)
     assert day17 and "disabled" not in day17.group(0)
-    for day in ("day16", "day18", "day19", "day20"):
+    # Days 16-19 are implemented and enabled; only Day 20 stays disabled.
+    for day in ("day16", "day18", "day19"):
         btn = re.search(r'<button[^>]*id="tab-' + day + r'"[^>]*>', html)
-        assert btn
-    for day in ("day18", "day19", "day20"):
-        btn = re.search(r'<button[^>]*id="tab-' + day + r'"[^>]*>', html)
-        assert "disabled" in btn.group(0)
+        assert btn and "disabled" not in btn.group(0), f"{day} must be enabled"
+    day20 = re.search(r'<button[^>]*id="tab-day20"[^>]*>', html)
+    assert day20 and "disabled" in day20.group(0)
 
 
 def test_day17_js_dom_references_exist(client) -> None:

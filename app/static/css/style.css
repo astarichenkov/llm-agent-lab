@@ -1684,3 +1684,174 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
   padding: 0.4rem 0 0.4rem 0.8rem;
 }
 .d17-samples { margin-top: 0.2rem; }
+
+/* ---------------- Day 18 — scheduled monitoring ---------------- */
+#panel-day18 { display: none; }
+
+.d18-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 0.8rem;
+  margin-bottom: 0.8rem;
+}
+.d18-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.d18-field input,
+.d18-field select {
+  background: rgba(0, 0, 0, 0.25);
+  color: inherit;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 0.45rem 0.55rem;
+  font: inherit;
+  font-size: 0.9rem;
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 400;
+}
+
+.d18-job-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.95rem;
+}
+.d18-badge {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.15rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  vertical-align: middle;
+}
+.d18-badge.d18-status-active { color: #7fe0a0; border-color: #2f6b45; }
+.d18-badge.d18-status-stopped { color: #c9c9c9; border-color: #555; }
+.d18-badge.d18-status-error { color: #ffb4a2; border-color: #8f3b35; }
+
+.d18-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.7rem;
+}
+.d18-summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 0.6rem 0.8rem;
+  background: var(--panel);
+}
+.d18-summary-item span {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.d18-summary-item b {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1.05rem;
+}
+
+.d18-runs {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.d18-runs th,
+.d18-runs td {
+  border-bottom: 1px solid var(--border);
+  padding: 0.45rem 0.6rem;
+  text-align: left;
+}
+.d18-runs thead th {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.d18-runs td.d18-run-ok { color: #7fe0a0; font-weight: 700; }
+.d18-runs td.d18-run-error { color: #ffb4a2; font-weight: 700; }
+.d18-runs .d18-run-error-msg {
+  color: #ffb4a2;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+}
+
+/* ------------------------------------------------------------------ */
+/* Day 19 — MCP tool composition pipeline                             */
+/* ------------------------------------------------------------------ */
+.d19-field-wide {
+  grid-column: 1 / -1;
+}
+
+.d19-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.d19-step {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.d19-step-icon {
+  font-weight: 700;
+  font-size: 1.05rem;
+  width: 1.2rem;
+  text-align: center;
+}
+
+.d19-step-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.d19-step-detail {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.d19-step-ok .d19-step-icon { color: #7fe0a0; }
+.d19-step-error .d19-step-icon { color: #ffb4a2; }
+.d19-step-skipped .d19-step-icon { color: #c9c9c9; }
+
+.d19-artifacts {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.d19-artifacts a {
+  color: #8ecbff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.d19-artifact-path {
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+}

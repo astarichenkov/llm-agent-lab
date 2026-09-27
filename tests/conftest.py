@@ -20,8 +20,11 @@ from app.api.routes import (
     get_day14_service,
     get_day15_service,
     get_day17_service,
+    get_day18_service,
+    get_day19_service,
     get_deepseek_service,
     get_mcp_client,
+    get_monitoring_service,
 )
 from app.agents.llm import DeepSeekLLMClient
 from app.agents.manager import AgentManager
@@ -39,6 +42,8 @@ from app.services.day13 import Day13TaskService, TaskStore
 from app.services.day14 import Day14InvariantService, InvariantStore
 from app.services.day15 import Day15LifecycleService, LifecycleStore
 from app.services.day17 import Day17LogsService
+from app.services.day18 import Day18MonitoringAgentService, MonitoringService
+from app.services.day19 import Day19PipelineService, Day19Toolset
 from app.services.mcp import MCPClient, MCPToolCallResult
 from app.schemas.day16 import (
     MCPServerInfo,
@@ -79,6 +84,10 @@ class FakeDeepSeekService:
         # Day 17: scripted tool-calling completions.
         self.generate_with_tools_calls: list[dict] = []
         self.tool_sequence: list[dict] = []
+        # Day 19: optional queue of plain ``generate`` answers. When set, each
+        # call pops one item (e.g. a structured analysis JSON, then a final
+        # textual answer). Existing behaviour is unchanged when left empty.
+        self.generate_sequence: list[str] = []
 
     async def generate(
         self,
@@ -105,6 +114,12 @@ class FakeDeepSeekService:
             self.last_message = messages[-1].get("content")
         if self.raise_error is not None:
             raise self.raise_error
+        if self.generate_sequence:
+            return (
+                self.generate_sequence.pop(0),
+                "stop",
+                {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+            )
         return (
             self.answer,
             "stop",
@@ -236,6 +251,8 @@ def settings(tmp_path) -> Settings:
         day13_task_path=str(tmp_path / "day13_task_state.json"),
         day14_invariants_path=str(tmp_path / "day14_invariants.json"),
         day15_task_path=str(tmp_path / "day15_lifecycle_state.json"),
+        day18_monitoring_db_path=str(tmp_path / "day18_monitoring.db"),
+        day19_artifact_root=str(tmp_path / "day19_runs"),
     )
 
 
@@ -419,6 +436,63 @@ def day17_service(
 
 
 @pytest.fixture
+def monitoring_service(settings: Settings) -> MonitoringService:
+    """Day 18 monitoring service over a temporary SQLite DB (no scheduler)."""
+    return MonitoringService(settings)
+
+
+class FakeDay19VictoriaLogs:
+    """Deterministic stand-in for the Day 17 client used by Day 19 tests."""
+
+    def __init__(self, rows=None, error: Exception | None = None) -> None:
+        self.rows = rows if rows is not None else [
+            {
+                "_time": "2026-09-28T10:00:00Z",
+                "_msg": "connection timeout to db",
+                "level": "ERROR",
+            },
+            {
+                "_time": "2026-09-28T10:01:00Z",
+                "_msg": "502 bad gateway",
+                "level": "ERROR",
+            },
+        ]
+        self.error = error
+        self.calls: list[dict] = []
+
+    async def search(self, *, query, start, end, limit):
+        self.calls.append({"query": query, "start": start, "end": end, "limit": limit})
+        if self.error is not None:
+            raise self.error
+        return list(self.rows), 0
+
+
+@pytest.fixture
+def day19_service(
+    settings: Settings, fake_service: FakeDeepSeekService
+) -> Day19PipelineService:
+    """Day 19 pipeline backed by the fake LLM and a fake VictoriaLogs client."""
+    toolset = Day19Toolset(
+        settings,
+        deepseek=fake_service,
+        client_factory=lambda: FakeDay19VictoriaLogs(),
+    )
+    return Day19PipelineService(settings, toolset=toolset, deepseek=fake_service)
+
+
+@pytest.fixture
+def day18_service(
+    settings: Settings,
+    fake_service: FakeDeepSeekService,
+    monitoring_service: MonitoringService,
+) -> Day18MonitoringAgentService:
+    """Day 18 agent backed by the fake LLM and a temporary monitoring service."""
+    return Day18MonitoringAgentService(
+        settings, monitoring_service, deepseek=fake_service
+    )
+
+
+@pytest.fixture
 def app(settings: Settings) -> FastAPI:
     return create_app(settings=settings)
 
@@ -439,6 +513,9 @@ def client(
     day15_service: Day15LifecycleService,
     mcp_client: MCPClient,
     day17_service: Day17LogsService,
+    monitoring_service: MonitoringService,
+    day18_service: Day18MonitoringAgentService,
+    day19_service: Day19PipelineService,
 ):
     """TestClient with every provider-backed service swapped for a fake."""
     app.dependency_overrides[get_settings] = lambda: settings
@@ -454,6 +531,9 @@ def client(
     app.dependency_overrides[get_day15_service] = lambda: day15_service
     app.dependency_overrides[get_mcp_client] = lambda: mcp_client
     app.dependency_overrides[get_day17_service] = lambda: day17_service
+    app.dependency_overrides[get_monitoring_service] = lambda: monitoring_service
+    app.dependency_overrides[get_day18_service] = lambda: day18_service
+    app.dependency_overrides[get_day19_service] = lambda: day19_service
     # Starlette 1.x re-raises handled server errors by design; the app ships
     # a global error handler, so capture its response instead.
     with TestClient(app, raise_server_exceptions=False) as test_client:

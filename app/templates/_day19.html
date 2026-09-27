@@ -1,0 +1,111 @@
+<main class="container day19-panel" id="panel-day19">
+  <h1>Day 19 — MCP Pipeline</h1>
+  <p class="subtitle">
+    Три MCP-инструмента объединяются в автоматический pipeline:
+    <strong>search_logs</strong> получает данные,
+    <strong>analyze_logs</strong> делает структурированный анализ (LLM),
+    <strong>save_report</strong> детерминированно сохраняет артефакты.
+    Backend сам выполняет шаги в правильном порядке и передаёт результат
+    каждого tool следующему — пользователь не указывает порядок вручную.
+  </p>
+
+  <!-- 1. PIPELINE FORM -->
+  <section class="preview-panel" id="d19-form-section" aria-labelledby="d19-form-heading">
+    <h2 id="d19-form-heading">Run pipeline</h2>
+    <div class="d18-form-grid">
+      <label class="d18-field">
+        <span>Service</span>
+        <input type="text" id="d19-service" maxlength="200" value="application">
+      </label>
+      <label class="d18-field">
+        <span>Level</span>
+        <select id="d19-level">
+          <option value="">ANY</option>
+          <option value="ERROR" selected>ERROR</option>
+          <option value="WARN">WARN</option>
+          <option value="INFO">INFO</option>
+        </select>
+      </label>
+      <label class="d18-field">
+        <span>Period</span>
+        <select id="d19-since">
+          <option value="1">1 min</option>
+          <option value="5">5 min</option>
+          <option value="15">15 min</option>
+          <option value="30" selected>30 min</option>
+          <option value="60">1 hour</option>
+          <option value="180">3 hours</option>
+          <option value="360">6 hours</option>
+        </select>
+      </label>
+      <label class="d18-field">
+        <span>Limit</span>
+        <input type="number" id="d19-limit" min="1" max="500" value="100">
+      </label>
+      <label class="d18-field d19-field-wide">
+        <span>Analysis question</span>
+        <input type="text" id="d19-question" maxlength="2000"
+               value="Найди основные типы ошибок и возможные причины">
+      </label>
+      <label class="d18-field d19-field-wide">
+        <span>Text contains (optional)</span>
+        <input type="text" id="d19-text" maxlength="200" placeholder="">
+      </label>
+    </div>
+    <p class="field-hint">
+      Pipeline: <code>search_logs → analyze_logs → save_report</code>.
+      Результат каждого шага передаётся следующему. Сырые stage-логи
+      санитизируются перед анализом и сохранением и не выводятся в браузер.
+    </p>
+    <div class="actions">
+      <button type="button" class="primary-btn" id="d19-run">Run pipeline</button>
+      <span class="loading hidden" id="d19-loading" role="status">Running pipeline…</span>
+    </div>
+    <p id="d19-error" class="error hidden" role="alert"></p>
+  </section>
+
+  <!-- 2. FINAL ANSWER -->
+  <section class="preview-panel hidden" id="d19-answer-section" aria-labelledby="d19-answer-heading">
+    <h2 id="d19-answer-heading">Agent response</h2>
+    <div class="d17-answer" id="d19-answer"></div>
+  </section>
+
+  <!-- 3. PIPELINE STEPS -->
+  <section class="preview-panel hidden" id="d19-steps-section" aria-labelledby="d19-steps-heading">
+    <h2 id="d19-steps-heading">Pipeline</h2>
+    <ol class="d19-steps" id="d19-steps" aria-live="polite"></ol>
+  </section>
+
+  <!-- 4. SUMMARY -->
+  <section class="preview-panel hidden" id="d19-summary-section" aria-labelledby="d19-summary-heading">
+    <h2 id="d19-summary-heading">Analysis summary</h2>
+    <div class="d18-summary-grid">
+      <div class="d18-summary-item"><span>Logs received</span><b id="d19-logs-received">0</b></div>
+      <div class="d18-summary-item"><span>Logs analyzed</span><b id="d19-logs-analyzed">0</b></div>
+      <div class="d18-summary-item"><span>Error groups</span><b id="d19-groups">0</b></div>
+    </div>
+    <p class="field-hint" id="d19-analysis-summary"></p>
+  </section>
+
+  <!-- 5. ARTIFACTS -->
+  <section class="preview-panel hidden" id="d19-artifacts-section" aria-labelledby="d19-artifacts-heading">
+    <h2 id="d19-artifacts-heading">Artifacts</h2>
+    <ul class="d19-artifacts" id="d19-artifacts"></ul>
+    <p class="field-hint">
+      Доступны только известные файлы запуска внутри
+      <code>data/day19/runs/</code>. Полный <code>raw.jsonl</code> не
+      отображается по умолчанию.
+    </p>
+    <div class="actions">
+      <button type="button" class="ghost-btn" id="d19-preview-analysis">Preview analysis.md</button>
+      <button type="button" class="ghost-btn" id="d19-preview-metadata">Preview metadata.json</button>
+    </div>
+    <pre class="d16-tool-schema hidden" id="d19-artifact-preview">—</pre>
+  </section>
+
+  <!-- 6. FULL TRACE -->
+  <section class="preview-panel hidden" id="d19-trace-section" aria-labelledby="d19-trace-heading">
+    <h2 id="d19-trace-heading">Pipeline trace</h2>
+    <ol class="d16-trace" id="d19-trace" aria-live="polite"></ol>
+  </section>
+</main>
