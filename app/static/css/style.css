@@ -1855,3 +1855,17 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.78rem;
 }
+
+.d19-mask-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.d19-mask-toggle input {
+  width: auto;
+  accent-color: #8ecbff;
+}

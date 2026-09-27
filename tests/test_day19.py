@@ -777,3 +777,134 @@ def test_day19_frontend_does_not_render_raw_logs_or_hardcode_secrets() -> None:
     assert "renderSteps" in js
     assert "renderArtifacts" in js
     assert "search_logs" in js and "analyze_logs" in js and "save_report" in js
+    assert "d19-mask" in js
+
+
+# ----------------------------------------------------------------------
+# 14. Opt-in data masking ("Маскировать данные")
+# ----------------------------------------------------------------------
+MASKED_ROWS = [
+    {
+        "_time": "2026-09-28T10:00:00Z",
+        "_msg": (
+            "upstream https://api.internal.example.com/v1 failed "
+            "via db.internal:5432 from 10.0.0.7"
+        ),
+        "service": "payment-service",
+        "container_name": "payments-7f9c2a",
+        "host": "node-1.internal",
+    }
+]
+
+
+async def test_mask_data_masks_identifiers_in_artifacts_and_output(
+    settings, fake_service
+) -> None:
+    fake_service.generate_sequence = [json.dumps(VALID_ANALYSIS), "готово"]
+    service, recorder = _service(
+        settings, fake_service, rows=MASKED_ROWS, recording=True
+    )
+    response = await service.run(_request(mask_data=True, service="payment-service"))
+    assert response.status == "completed"
+
+    # The masked rows (not the originals) reach analyze_logs and save_report.
+    analyze_logs = recorder.calls[1][1]["logs"]
+    save_args = recorder.calls[2][1]
+    assert analyze_logs[0]["fields"]["service"] == "[MASKED]"
+    assert analyze_logs[0]["fields"]["container_name"] == "[MASKED]"
+    assert "[URL]" in analyze_logs[0]["message"]
+    assert "db.internal:5432" not in analyze_logs[0]["message"]
+    assert "10.0.0.7" not in analyze_logs[0]["message"]
+    assert analyze_logs == save_args["logs"]
+    assert save_args["service"] == "[MASKED]"
+
+    # The response exposes no original identifiers either.
+    assert response.search.service == "[MASKED]"
+
+    # Saved artifacts contain no original identifiers.
+    run_dir = Path(settings.day19_artifact_root) / response.artifacts.run_id
+    blob = "\n".join(
+        (run_dir / name).read_text(encoding="utf-8")
+        for name in ("raw.jsonl", "analysis.md", "metadata.json")
+    )
+    for secret in (
+        "payment-service",
+        "payments-7f9c2a",
+        "node-1.internal",
+        "api.internal.example.com",
+        "db.internal",
+        "10.0.0.7",
+    ):
+        assert secret not in blob, f"{secret} leaked with masking enabled"
+    assert "[MASKED]" in blob
+    assert "[URL]" in blob
+
+
+async def test_mask_data_disabled_keeps_original_service(settings, fake_service) -> None:
+    fake_service.generate_sequence = [json.dumps(VALID_ANALYSIS), "готово"]
+    service, recorder = _service(
+        settings, fake_service, rows=MASKED_ROWS, recording=True
+    )
+    response = await service.run(_request(mask_data=False, service="payment-service"))
+    assert response.status == "completed"
+    assert response.search.service == "payment-service"
+    assert recorder.calls[1][1]["service"] == "payment-service"
+    run_dir = Path(settings.day19_artifact_root) / response.artifacts.run_id
+    assert "payment-service" in (run_dir / "metadata.json").read_text(encoding="utf-8")
+
+
+def test_data_masker_masks_urls_hosts_ips_and_emails() -> None:
+    from app.services.day19.masking import DataMasker
+
+    masker = DataMasker(["payment-service"])
+    text = (
+        "see https://api.internal.example.com/v1, db.internal:5432, "
+        "10.0.0.7 and ops@example.com for payment-service"
+    )
+    masked = masker.mask_text(text)
+    assert "[URL]" in masked
+    assert "db.internal:5432" not in masked
+    assert "10.0.0.7" not in masked
+    assert "ops@example.com" not in masked
+    assert "payment-service" not in masked
+    assert "[MASKED]" in masked
+
+
+def test_data_masker_masks_identifier_field_keys() -> None:
+    from app.services.day19.masking import DataMasker
+
+    masker = DataMasker()
+    value = {
+        "service": "svc-a",
+        "container_name": "c-1",
+        "host": "node-1",
+        "level": "ERROR",
+        "message": "ok",
+    }
+    masked = masker.mask_value(value)
+    assert masked["service"] == "[MASKED]"
+    assert masked["container_name"] == "[MASKED]"
+    assert masked["host"] == "[MASKED]"
+    # Non-identifier keys keep their value.
+    assert masked["level"] == "ERROR"
+    assert masked["message"] == "ok"
+
+
+def test_data_masker_keeps_timestamps_and_clock_times() -> None:
+    from app.services.day19.masking import DataMasker
+
+    masker = DataMasker()
+    # Clock times and ISO timestamps must not be mistaken for host:port.
+    assert masker.mask_text("2026-09-28T10:00:00Z") == "2026-09-28T10:00:00Z"
+    assert masker.mask_text("timeout after 10:00 seconds") == (
+        "timeout after 10:00 seconds"
+    )
+    # Real host:port values are still masked.
+    assert masker.mask_text("db.internal:5432") == "[MASKED]"
+    assert masker.mask_text("localhost:8080") == "[MASKED]"
+
+
+def test_day19_mask_checkbox_present(client) -> None:
+    html = client.get("/").text
+    assert 'id="d19-mask"' in html
+    assert "Маскировать данные" in html

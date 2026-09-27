@@ -42,6 +42,7 @@ from app.schemas.day19 import (
     SearchLogsPipelineInput,
 )
 from app.services.day19.artifacts import ArtifactError, ArtifactStore, generate_run_id
+from app.services.day19.masking import DataMasker
 from app.services.day19.tools import Day19Toolset
 from app.services.deepseek import DeepSeekError
 from app.services.mcp.pipeline.client import PipelineMCPClient
@@ -108,6 +109,17 @@ class Day19PipelineService:
         trace: list[Any] = []
         started_at = self._now()
         pipeline_id = generate_run_id(started_at)
+        # Opt-in masking layer. It starts with the request's service name and is
+        # extended with service/container names discovered in the searched
+        # rows before anything is sent to the LLM or written to disk.
+        masker = DataMasker([request.service]) if request.mask_data else None
+
+        def finalize(
+            response: Day19PipelineResponse,
+        ) -> Day19PipelineResponse:
+            if masker is None:
+                return response
+            return Day19PipelineResponse(**masker.mask_value(response.model_dump()))
 
         def add(step: str, status: str, message: str, **details: Any) -> None:
             from app.schemas.day19 import Day19TraceStep
@@ -120,15 +132,17 @@ class Day19PipelineService:
 
         def fail(message: str) -> Day19PipelineResponse:
             add("pipeline_failed", TRACE_STATUS_ERROR, message)
-            return Day19PipelineResponse(
-                pipeline_id=pipeline_id,
-                status=PIPELINE_STATUS_FAILED,
-                answer="",
-                search=search_summary,
-                analysis=analysis_summary,
-                artifacts=artifacts,
-                trace=trace,
-                error=message,
+            return finalize(
+                Day19PipelineResponse(
+                    pipeline_id=pipeline_id,
+                    status=PIPELINE_STATUS_FAILED,
+                    answer="",
+                    search=search_summary,
+                    analysis=analysis_summary,
+                    artifacts=artifacts,
+                    trace=trace,
+                    error=message,
+                )
             )
 
         search_summary = None
@@ -192,6 +206,21 @@ class Day19PipelineService:
 
         search_summary = self._toolset.search_summary(search_payload)
         logs = list(search_payload.get("logs") or [])
+
+        # Build the masked view of the data if the user opted in. The masked
+        # rows are what actually flow to analyze_logs / save_report, so the
+        # LLM and the saved artifacts never see the original identifiers.
+        if masker is not None:
+            masker.add_log_literals(logs)
+            safe_logs = masker.mask_logs(logs)
+            safe_service = masker.mask_text(request.service)
+            safe_question = masker.mask_text(request.question)
+            safe_text_contains = masker.mask_text(request.text_contains)
+        else:
+            safe_logs = logs
+            safe_service = request.service
+            safe_question = request.question
+            safe_text_contains = request.text_contains
         add(
             "search_logs",
             TRACE_STATUS_OK,
@@ -200,12 +229,14 @@ class Day19PipelineService:
             truncated=search_summary.truncated,
         )
 
-        # Handoff #1: the ACTUAL sanitized rows go to analyze_logs.
+        # Handoff #1: the ACTUAL sanitized (and optionally masked) rows go to
+        # analyze_logs.
         add(
             "handoff_search_logs_to_analyze_logs",
             TRACE_STATUS_OK,
-            f"{len(logs)} logs passed to analyze_logs",
-            logs_passed=len(logs),
+            f"{len(safe_logs)} logs passed to analyze_logs",
+            logs_passed=len(safe_logs),
+            masked=request.mask_data,
         )
 
         # 2) analyze_logs — processes the data (single LLM step).
@@ -213,14 +244,14 @@ class Day19PipelineService:
             "analyze_logs",
             "started",
             "Calling MCP tool analyze_logs",
-            logs_passed=len(logs),
+            logs_passed=len(safe_logs),
         )
         analyze_result = await self._mcp.call_tool(
             "analyze_logs",
             {
-                "service": request.service,
-                "question": request.question,
-                "logs": logs,
+                "service": safe_service,
+                "question": safe_question,
+                "logs": safe_logs,
                 "since_minutes": request.since_minutes,
                 "level": search_summary.level,
                 "start": search_summary.start,
@@ -273,10 +304,10 @@ class Day19PipelineService:
             {
                 "run_id": run_id,
                 "pipeline_id": pipeline_id,
-                "service": request.service,
+                "service": safe_service,
                 "since_minutes": request.since_minutes,
                 "level": search_summary.level,
-                "text_contains": request.text_contains,
+                "text_contains": safe_text_contains,
                 "start": search_summary.start,
                 "end": search_summary.end,
                 "logs_received": search_summary.count,
@@ -286,7 +317,7 @@ class Day19PipelineService:
                 "analysis_truncated": analysis_summary.analysis_truncated,
                 "model": self._settings.deepseek_model,
                 "duration_ms": duration_ms,
-                "logs": logs,
+                "logs": safe_logs,
                 "analysis": analysis_model.model_dump(),
             },
         )
@@ -311,25 +342,35 @@ class Day19PipelineService:
 
         # 4) Final natural-language answer (compact input, deterministic fallback).
         answer = await self._final_answer(
-            request=request,
+            request=request.model_copy(
+                update={
+                    "service": safe_service,
+                    "question": safe_question,
+                    "text_contains": safe_text_contains,
+                }
+            ),
             search=search_summary,
             analysis=analysis_summary,
             artifacts=artifacts,
         )
+        if masker is not None:
+            answer = masker.mask_text(answer)
         add(
             "pipeline_completed",
             TRACE_STATUS_OK,
             "Pipeline completed successfully",
             error_groups=analysis_summary.error_groups_count,
         )
-        return Day19PipelineResponse(
-            pipeline_id=pipeline_id,
-            status=PIPELINE_STATUS_COMPLETED,
-            answer=answer,
-            search=search_summary,
-            analysis=analysis_summary,
-            artifacts=artifacts,
-            trace=trace,
+        return finalize(
+            Day19PipelineResponse(
+                pipeline_id=pipeline_id,
+                status=PIPELINE_STATUS_COMPLETED,
+                answer=answer,
+                search=search_summary,
+                analysis=analysis_summary,
+                artifacts=artifacts,
+                trace=trace,
+            )
         )
 
     # ------------------------------------------------------------------

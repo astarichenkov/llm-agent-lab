@@ -270,6 +270,25 @@ JSON, а формат файла стабилен и пригоден для dif
   проверяется тестом `test_secrets_are_sanitized_before_analyze_and_save`.
 * LLM не получает неограниченный объём: действуют лимиты анализа.
 
+## Маскирование данных (галка «Маскировать данные»)
+
+Дополнительный слой приватности поверх sanitizer-а. При включённой галке
+pipeline маскирует идентификаторы **до** отправки в LLM, в финальный ответ,
+в trace и в артефакты:
+
+* URL (`https://...`) → `[URL]`;
+* `host:port`, IPv4-адреса и e-mail → `[MASKED]` / `[IP]` / `[EMAIL]`;
+* значения полей-идентификаторов (`service`, `container`, `host`, `pod`,
+  `namespace`, `node`, `cluster`, `url`, `endpoint`, ...) → `[MASKED]`;
+* literal-имена сервиса/контейнеров, собранные из запроса и из `fields`
+  найденных строк.
+
+Маскирование одностороннее: восстановить исходные значения из вывода
+нельзя. По умолчанию галка выключена, поведение pipeline не меняется.
+Маскированные строки — это то, что реально уходит в `analyze_logs` и
+`save_report`, поэтому исходные идентификаторы не попадают ни в
+`raw.jsonl`, ни в `analysis.md`, ни в `metadata.json`.
+
 ## Path security
 
 Путь к отчёту **не** определяется пользовательским вводом:
@@ -321,7 +340,7 @@ GET /api/week4/day19/runs/{run_id}/artifacts/{raw.jsonl|analysis.md|metadata.jso
 ## UI
 
 * Week 4 → Day 19 — форма: Service / Level / Period / Limit / Analysis
-  question (+ optional text).
+  question (+ optional text) и галка **Маскировать данные**.
 * Кнопка **Run pipeline**.
 * Визуализация шагов: `✓ search_logs (N logs received)`,
   `✓ analyze_logs (K groups found)`, `✓ save_report (3 artifacts created)`.

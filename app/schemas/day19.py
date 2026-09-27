@@ -109,6 +109,13 @@ class Day19PipelineRequest(BaseModel):
         max_length=MAX_DAY19_QUESTION_LENGTH,
         description="What the structured analysis should focus on.",
     )
+    mask_data: bool = Field(
+        default=False,
+        description=(
+            "When true, mask URLs, service/container/host names and other "
+            "identifiers in the analysis, answer, trace and saved artifacts."
+        ),
+    )
 
     @field_validator("level", "text_contains")
     @classmethod

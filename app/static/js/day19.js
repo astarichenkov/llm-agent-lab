@@ -24,7 +24,7 @@
     var required = [
       "panel-day19",
       "d19-service", "d19-level", "d19-since", "d19-limit",
-      "d19-question", "d19-text", "d19-run", "d19-loading", "d19-error",
+      "d19-question", "d19-text", "d19-mask", "d19-run", "d19-loading", "d19-error",
       "d19-answer-section", "d19-answer",
       "d19-steps-section", "d19-steps",
       "d19-summary-section", "d19-logs-received", "d19-logs-analyzed",
@@ -229,6 +229,7 @@
       if (level) payload.level = level;
       var text = ($("d19-text").value || "").trim();
       if (text) payload.text_contains = text;
+      if ($("d19-mask").checked) payload.mask_data = true;
 
       inFlight = true;
       setError("");
