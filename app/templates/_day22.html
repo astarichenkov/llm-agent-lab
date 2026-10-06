@@ -1,0 +1,103 @@
+<main class="container d22-panel" id="panel-day22">
+  <h1>Mitsubishi Xpander RAG Assistant</h1>
+  <p class="subtitle">Day 22 — No RAG vs RAG</p>
+
+  <!-- Sub-navigation inside Day 22 -->
+  <div class="d22-tabs" role="tablist" aria-label="Day 22 sections">
+    <button type="button" class="tab-btn active" id="d22-tab-ask" role="tab"
+            aria-selected="true" aria-controls="d22-view-ask">Ask / Compare</button>
+    <button type="button" class="tab-btn" id="d22-tab-eval" role="tab"
+            aria-selected="false" aria-controls="d22-view-eval">Evaluation</button>
+  </div>
+
+  <!-- ================= ASK / COMPARE ================= -->
+  <section id="d22-view-ask" role="tabpanel" aria-labelledby="d22-tab-ask">
+
+    <!-- Technical status -->
+    <section class="preview-panel" aria-labelledby="d22-status-heading">
+      <h2 id="d22-status-heading">Configuration</h2>
+      <div class="d22-status" id="d22-status" aria-live="polite">Loading…</div>
+    </section>
+
+    <!-- Question form -->
+    <section class="preview-panel" aria-labelledby="d22-form-heading">
+      <h2 id="d22-form-heading">Question</h2>
+      <div class="field">
+        <label for="d22-question">Вопрос про Mitsubishi Xpander</label>
+        <textarea id="d22-question" rows="3" maxlength="2000">Что владельцы в Telegram-чате называют возможной причиной того, что пластик на Xpander «поплыл»?</textarea>
+      </div>
+
+      <div class="d22-controls">
+        <fieldset class="d22-mode" id="d22-mode">
+          <legend>Mode</legend>
+          <label class="d22-radio">
+            <input type="radio" name="d22-mode" id="d22-mode-no-rag" value="no_rag">
+            <span>No RAG</span>
+          </label>
+          <label class="d22-radio">
+            <input type="radio" name="d22-mode" id="d22-mode-rag" value="rag" checked>
+            <span>RAG</span>
+          </label>
+        </fieldset>
+
+        <label class="d18-field d22-topk">
+          <span>Top-K</span>
+          <select id="d22-top-k">
+            <option value="1">1</option>
+            <option value="3">3</option>
+            <option value="5" selected>5</option>
+            <option value="10">10</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="actions">
+        <button type="button" class="primary-btn" id="d22-ask">Ask</button>
+        <button type="button" class="primary-btn" id="d22-compare">Compare No-RAG vs RAG</button>
+        <span class="loading hidden" id="d22-ask-loading" role="status">Searching knowledge base…</span>
+      </div>
+      <p id="d22-ask-error" class="error hidden" role="alert"></p>
+    </section>
+
+    <!-- Pipeline -->
+    <section class="preview-panel hidden" id="d22-pipeline-panel" aria-labelledby="d22-pipeline-heading">
+      <h2 id="d22-pipeline-heading">How this answer was generated</h2>
+      <pre class="d22-pipeline" id="d22-pipeline"></pre>
+    </section>
+
+    <!-- Results -->
+    <section id="d22-results" aria-live="polite"></section>
+  </section>
+
+  <!-- ================= EVALUATION ================= -->
+  <section id="d22-view-eval" class="hidden" role="tabpanel" aria-labelledby="d22-tab-eval">
+    <section class="preview-panel" aria-labelledby="d22-eval-summary-heading">
+      <h2 id="d22-eval-summary-heading">Evaluation summary</h2>
+      <div class="d22-summary" id="d22-eval-summary" aria-live="polite"></div>
+      <div class="actions">
+        <button type="button" class="primary-btn" id="d22-eval-run-all">Run all 10 questions</button>
+        <button type="button" class="link-btn" id="d22-eval-refresh">Refresh results</button>
+        <span class="loading hidden" id="d22-eval-loading" role="status">Running…</span>
+      </div>
+      <p class="field-hint">
+        Автоматическая оценка не выставляется. PASS/PARTIAL/FAIL ставит
+        пользователь; незаполненный вопрос не считается FAIL.
+      </p>
+      <p id="d22-eval-error" class="error hidden" role="alert"></p>
+    </section>
+
+    <section class="preview-panel" aria-labelledby="d22-eval-table-heading">
+      <h2 id="d22-eval-table-heading">Control questions</h2>
+      <div class="d22-table-wrap">
+        <table class="d22-table">
+          <thead>
+            <tr><th>ID</th><th>Question</th><th>Category</th><th>Expected source</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="d22-eval-table-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="d22-eval-detail" aria-live="polite"></section>
+  </section>
+</main>

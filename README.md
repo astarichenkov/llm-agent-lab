@@ -1913,6 +1913,1161 @@ curl -X DELETE http://127.0.0.1:8000/api/day15/task
 ["day6","day7","day8","day9","day10","day11","day12","day13","day14","day15"]`),
 стартовая вкладка — **День 15** (текущий модуль).
 
+## Week 5 / Day 21 — Индексация документов для Automotive RAG
+
+Локальный pipeline индексации базы знаний по Mitsubishi Xpander
+(технические мануалы + история Telegram-чата) — фундамент RAG на Day 22–25.
+Day 21 **не** делает RAG: нет LLM-ответов, reranking и citations; есть только
+технический `search` (top-K + similarity) для проверки индекса.
+
+```
+Manual PDF/TXT/MD ─► Loaders ─┐
+                             ▼
+Telegram JSON ──────►   Normalized Documents (Document + Segments)
+                             │
+                 ┌───────────┴───────────┐
+                 ▼                       ▼
+           Fixed Chunking          Structural Chunking
+           (окно + overlap)        (секции / сообщения)
+                 └───────────┬───────────┘
+                             ▼
+              Embeddings (локальный Ollama, bge-m3)
+                             ▼
+                 SQLite Vector Index (persistent)
+```
+
+Код: `app/services/rag/` (`loaders/`, `normalization/`, `chunking/`,
+`embeddings/`, `index/`, `ingestion/`, `service.py`, `cli.py`).
+
+### Команды
+
+```bash
+# статистика источников (мануалы: файлы/страницы; Telegram: сообщения)
+python -m app.services.rag.cli sources
+
+# полный rebuild индекса двумя стратегиями
+python -m app.services.rag.cli index --chunking fixed
+python -m app.services.rag.cli index --chunking structural --rebuild
+
+# статистика индекса
+python -m app.services.rag.cli stats
+
+# посмотреть чанки
+python -m app.services.rag.cli chunks --source telegram --limit 5
+
+# debug similarity search (без генерации ответа LLM)
+python -m app.services.rag.cli search "давление в шинах" --top-k 5
+
+# сравнить выдачу двух стратегий chunking на одном запросе
+python -m app.services.rag.cli compare-chunking "давление в шинах" --top-k 5
+```
+
+Эквивалентно `python -m app.services.rag ...`. Все параметры (пути, размеры
+чанков, overlap, провайдер/модель эмбеддингов, путь к индексу) задаются через
+env/`.env` (`RAG_*`) — см. `docs/week5/day21.md` и `.env.example`.
+
+### Day 21 — Comparing Chunking Strategies
+
+`compare-chunking` — демонстрационная read-only команда: она **не** строит и
+**не** меняет индексы, а прогоняет один и тот же запрос по двум уже готовым
+индексам (structural и fixed) и показывает объективные наблюдаемые метрики.
+
+```powershell
+.venv\Scripts\python.exe -m app.services.rag.cli compare-chunking `
+  "давление в шинах" --top-k 5
+```
+
+Флаги:
+
+| Флаг | По умолчанию | Назначение |
+|------|--------------|------------|
+| `QUERY` | — | запрос (single mode) |
+| `--top-k N` | `5` | сколько результатов брать из каждого индекса |
+| `--structural-index PATH` | `RAG_INDEX_PATH` (`data/day21/rag_index.sqlite3`) | structural-индекс |
+| `--fixed-index PATH` | `RAG_FIXED_INDEX_PATH` (`data/day21/rag_index_fixed.sqlite3`) | fixed-индекс |
+| `--full` | off | печатать полный текст chunks (иначе preview) |
+| `--queries-file PATH` | — | batch mode: по одному запросу на строку |
+
+Batch mode:
+
+```powershell
+.venv\Scripts\python.exe -m app.services.rag.cli compare-chunking `
+  --queries-file data/day21/comparison_queries.txt --top-k 5
+```
+
+#### Fixed
+
+Текст segments склеивается и режется скользящим окном фиксированного размера
+с overlap (`RAG_CHUNK_SIZE=1200`, `RAG_CHUNK_OVERLAP=200`).
+
+Плюсы: простота, предсказуемый размер, универсальность.
+Минусы: граница окна может разрезать логический блок или таблицу, а overlap
+иногда дублирует один и тот же смысловой фрагмент.
+
+#### Structural
+
+Использует естественные границы конкретного source; chunk собирается из
+**целых** segments и никогда не режет segment посередине (кроме случая, когда
+segment сам длиннее `RAG_STRUCTURAL_MAX_CHARS=1800` — тогда он делится по
+границам предложений):
+
+* **manuals (PDF/TXT/MD)** — segments это абзацы PDF и распознанные заголовки,
+  а для Markdown — секции. Новый chunk начинается при смене секции/заголовка
+  (если текущий chunk уже набрал `RAG_STRUCTURAL_MIN_CHARS=400`) либо когда
+  добавление следующего segment превысит `RAG_STRUCTURAL_MAX_CHARS`; заголовок
+  остаётся вместе с вводными к нему абзацами;
+* **Telegram** — segments это отдельные сообщения, которые loader заранее
+  группирует в диалоги по времени (`RAG_TELEGRAM_GAP_MINUTES=30`) и не более
+  `RAG_TELEGRAM_MAX_GROUP_MESSAGES=12` сообщений; structural сохраняет эти
+  группы целиком, поэтому ответы остаются рядом с вопросами.
+
+#### Что показывает comparison output
+
+* embedding provider/model обоих индексов (должны совпадать, иначе команда
+  завершается понятной ошибкой и не сравнивает несравнимое);
+* количество chunks, средний/min/max размер текста и распределение по
+  `source_type` — для обоих индексов;
+* top-K каждого индекса: score, source metadata и preview/full text;
+* `Same source/chunk regions` — **односторонняя** метрика: для каждого из
+  structural top-K hits проверяется, есть ли в fixed top-K hit с тем же
+  `source`/`source_type`, у которого пересекается диапазон страниц (manuals,
+  по `page` / `page_from`–`page_to`) или пересекаются `message_ids` (Telegram).
+  `Fixed regions matched` — та же проверка в обратную сторону. Если метаданных
+  недостаточно, выводится `unavailable`, а не догадка;
+* top-1 и average top-K similarity scores обоих индексов;
+* никакого автоматического «победителя» нет: similarity score сам по себе не
+  является метрикой качества, решение принимает пользователь, читая chunks.
+
+### Что важно для приватности
+
+Telegram export — **приватные данные**. `.gitignore` исключает
+`docs/xpander/ChatExport/`, `docs/xpander/manual/`, `data/day21/` и временные
+`*.building*`. Полное описание, metadata, сравнение двух стратегий chunking и
+ограничения — в [`docs/week5/day21.md`](docs/week5/day21.md).
+
+## Week 5 / Day 22 — First RAG Request
+
+Первый полноценный RAG-pipeline поверх индекса Day 21 и его честное сравнение
+с обычным запросом к той же генеративной модели. Основной интерфейс — Web UI,
+вкладка **`Day 22 — RAG Assistant`** (заголовок `Mitsubishi Xpander RAG
+Assistant`, подзаголовок `Day 22 — No RAG vs RAG`).
+
+Ключевое правило: в обоих режимах используется **одна и та же generation
+model, temperature и system prompt**. Разница только в наличии/отсутствии
+retrieved context.
+
+### Architecture
+
+```text
+                     NO RAG
+Question ─────────────────────────► Generation LLM
+                                         │
+                                         ▼
+                                       Answer
+
+
+                       RAG
+Question
+   │
+   ▼
+Embedding / bge-m3
+   │
+   ▼
+Structural SQLite Index (Day 21)
+   │
+   ▼
+Top-K chunks
+   │
+   ▼
+Context Builder
+   │
+   ▼
+Generation LLM   (та же модель, что и в No-RAG)
+   │
+   ▼
+Answer
+```
+
+### Embedding vs generation model
+
+Это **разные роли** и разные модели:
+
+* **Embedding** — Ollama `bge-m3` (1024 измерения). Используется только для
+  векторизации документов и запроса (`RAG_EMBEDDING_MODEL`). `bge-m3` —
+  embedding-модель и **никогда** не используется для генерации ответов.
+* **Generation** — chat-модель, которая пишет ответ. Провайдер и модель
+  задаются ОДНОЙ конфигурацией (`RAG_GENERATION_PROVIDER`,
+  `RAG_GENERATION_MODEL`) и резолвятся в одном месте
+  (`app/services/rag/generation/factory.py`). По умолчанию переиспользуется
+  существующий DeepSeek-клиент проекта; провайдер `ollama` использует
+  локальную chat-модель. Одна и та же provider-инстанция обслуживает оба
+  режима.
+
+```text
+Embedding model:  Ollama / bge-m3
+Generation model: configurable (default: existing DeepSeek client)
+Temperature:      RAG_GENERATION_TEMPERATURE (default 0.0)
+Default Top-K:    5   (валидный диапазон 1..20, UI: 1/3/5/10)
+Index:            structural — data/day21/rag_index.sqlite3
+```
+
+### No-RAG mode
+
+```text
+Question → Generation LLM → Answer
+```
+
+* vector search НЕ выполняется;
+* chunks модели НЕ передаются;
+* system prompt — базовый, без RAG-инструкций;
+* в UI показывается `NO RAG ANSWER`, `Model`, `Mode: No RAG`,
+  `RAG context: disabled`.
+
+### RAG mode
+
+```text
+Question → bge-m3 query embedding → structural SQLite index
+        → Top-K chunks → Context Builder → Generation LLM → Answer
+```
+
+* retrieval переиспользует Day 21 `RagService.search` (никакого SQL/векторной
+  математики в web-слое);
+* Top-K валидируется (1..20), по умолчанию 5;
+* retrieved chunks показываются отдельными раскрываемыми карточками
+  (rank, similarity, source type, source/page/section или chat/date/message
+  ids/authors, chunk id, preview + `Show full chunk`);
+* в UI показывается `RAG ANSWER` и блок `Retrieved Context`.
+
+### Context format
+
+Context Builder (`app/services/rag/context.py`) собирает найденные chunks в
+понятный блок. Показываются ТОЛЬКО реально присутствующие поля (у manual нет
+`message_ids`, у Telegram нет `page`), ничего не додумывается:
+
+```text
+source_type: manual
+source_kind: Официальная техническая документация (manual)
+source: 20_XPANDER_RU1.pdf
+page: 238
+chunk_id: ...
+
+TEXT:
+...
+
+source_type: telegram
+source_kind: Обсуждение владельцев (Telegram community)
+source: result.json
+chat: Xpander Club
+message_ids: 83159, 83165
+authors: ...
+date_from: ...
+date_to: ...
+chunk_id: ...
+
+TEXT:
+...
+```
+
+### RAG prompt
+
+Базовый system prompt одинаков в обоих режимах. В RAG дополнительно
+добавляются правила работы с контекстом:
+
+1. вопрос про Mitsubishi Xpander;
+2. в RAG предоставляется найденный context — его нужно использовать;
+3. `MANUAL` — официальная/техническая документация;
+4. `TELEGRAM` — обсуждения и пользовательский опыт владельцев;
+5. информацию из Telegram формулировать как опыт/обсуждение владельцев, а
+   **НЕ** как официальную рекомендацию Mitsubishi.
+
+Обязательных citations внутри текста ответа на Day 22 нет — metadata
+показывается отдельно в UI (это Day 24).
+
+### Web interface
+
+Вкладка `Day 22 — RAG Assistant` содержит:
+
+* поле **Question**;
+* переключатель **Mode**: `No RAG` / `RAG`;
+* **Top-K**: 1/3/5/10 (default 5);
+* **Ask** и **Compare No-RAG vs RAG** (последняя выполняет один вопрос в двух
+  режимах и показывает ответы рядом — на desktop в две колонки);
+* блок `How this answer was generated` (pipeline);
+* подвкладку **Evaluation** (10 контрольных вопросов, `Run`, `Run Compare`,
+  `Run all 10 questions`, ручные PASS/PARTIAL/FAIL, отметка
+  `Expected source retrieved`, summary).
+
+Технический блок показывает `Embedding model`, `Generation model`, `Provider`,
+`Temperature`, `Index` и `Top-K`. Web UI не читает SQLite и не считает
+embeddings — всё делает `RagAnswerService` через Day 21 retrieval слой.
+
+### API
+
+```text
+GET  /api/week5/day22/status
+POST /api/week5/day22/ask
+POST /api/week5/day22/compare
+GET  /api/week5/day22/evaluation/questions
+POST /api/week5/day22/evaluation/run/{id}
+POST /api/week5/day22/evaluation/run-all
+GET  /api/week5/day22/evaluation/results
+PUT  /api/week5/day22/evaluation/result/{id}
+```
+
+Ошибки (Ollama/DeepSeek недоступны, таймаут, отсутствующий/пустой индекс,
+невалидный Top-K, неизвестный evaluation id) обрабатываются на уровне API и
+возвращаются понятным сообщением; детали пишутся в application logs.
+
+### Docker и Ollama
+
+В Docker приложение и Ollama — разные контейнеры. Внутри app-контейнера
+`localhost` — это сам контейнер, а не хост, поэтому `RAG_OLLAMA_BASE_URL`
+должен указывать на хост:
+
+```yaml
+RAG_OLLAMA_BASE_URL: http://host.docker.internal:11434
+```
+
+Это значение и `extra_hosts: ["host.docker.internal:host-gateway"]`
+уже прописаны в `docker-compose.yml`. После изменения конфигурации
+пересоздайте контейнер: `docker compose up -d app`. Ошибки
+`Не удалось вычислить embedding запроса` / `Connection refused` внутри
+контейнера почти всегда означают именно `localhost` вместо
+`host.docker.internal`.
+
+### Evaluation dataset
+
+`data/day22/evaluation_questions.json` — 10 реальных контрольных вопросов,
+составленных ПОСЛЕ исследования индекса Day 21: 4 `manual_fact`,
+2 `manual_procedure`, 3 `telegram_experience`, 1 `combined`. У каждого вопроса
+есть `expected_facts` и `expected_sources`. Retrieval-проверка подтвердила, что
+эталонный источник каждого вопроса действительно находится в top-5
+структурного индекса.
+
+Ручные оценки сохраняются в `data/day22/evaluation_results.json`:
+
+```json
+{
+  "q01": {"no_rag": "partial", "rag": "pass", "expected_source_retrieved": true}
+}
+```
+
+`data/day22/evaluation_results.json` содержит только оценки, без сгенерированных
+ответов. Автоматической LLM-as-a-judge оценки нет: summary считает только
+реально выставленные оценки, незаполненный вопрос не считается FAIL.
+
+### Ограничения Day 22
+
+Это **baseline** RAG. На этом этапе намеренно отсутствуют:
+
+* query rewrite / query expansion;
+* reranking и cross-encoder;
+* relevance filtering и similarity threshold;
+* обязательный режим «не знаю»;
+* автоматические citations/quotes внутри ответа;
+* conversational memory / task state / multi-turn.
+
+Используется простой similarity retrieval поверх structural-индекса. Эти
+улучшения появятся на Day 23–25.
+
+### Day 22 Video Demo
+
+1. Открыть Web UI → `Mitsubishi Xpander RAG Assistant`.
+2. Задать **Recommended demo question** (см. ниже), выбрать `No RAG`, нажать
+   `Ask` — показать ответ и `RAG context: disabled`.
+3. Переключить `RAG`, нажать `Ask` — показать retrieval, source, chunk
+   metadata и ответ.
+4. Нажать `Compare No-RAG vs RAG` — показать ответы рядом.
+5. Открыть **Evaluation**, показать 10 контрольных вопросов.
+6. Открыть один manual question — показать expected facts/source и ответы.
+7. Открыть один Telegram question — показать приватные знания, недоступные
+   No-RAG модели.
+8. Показать summary `No-RAG`, `RAG` и `Expected source retrieved`.
+
+### Recommended demo question
+
+```text
+q07 (telegram_experience):
+Что владельцы в загруженном Telegram-чате называют возможной причиной
+того, что пластик (решётка радиатора и зеркала) на Xpander «поплыл»?
+```
+
+Почему он показателен: без RAG модель может только перечислить общие
+предположения (или придумать «данные из чата»), тогда как RAG находит реальное
+обсуждение владельцев в приватном ChatExport (версии про концентрированную
+пену для мойки, реакцию с ABS-пластиком, влияние солнца/химии, отсутствие
+официальной позиции производителя). Это знание недоступно обычной LLM.
+
+## Week 5 / Day 23 — Query Rewrite + Relevance Filtering
+
+Day 23 улучшает **качество контекста**, который получает генеративная модель,
+а не саму модель. Вкладка **`Day 23 — Improved RAG`**. Day 22 baseline при этом
+не изменён и остаётся контрольной группой.
+
+### Baseline (Day 22)
+
+```text
+Question
+   ↓
+Vector Search
+   ↓
+Top-5
+   ↓
+Context
+   ↓
+Generation LLM
+   ↓
+Answer
+```
+
+### Improved (Day 23)
+
+```text
+Question
+   ↓
+Query Rewrite
+   ↓
+Rewritten Query
+   ↓
+Embedding / bge-m3
+   ↓
+Vector Search
+   ↓
+Retrieval Top-K = 20
+   ↓
+Similarity Filter (score >= threshold)
+   ↓
+Final Top-K = 5
+   ↓
+Context
+   ↓
+Generation LLM (original question)
+   ↓
+Answer
+```
+
+### Зачем это нужно
+
+* **Query rewrite** переформулирует бытовой вопрос в поисковый запрос с
+  техническими терминами и синонимами. Он используется **только для retrieval**;
+  генеративная модель всегда отвечает на **исходный вопрос**.
+* **Retrieval Top-K (20) > Final Top-K (5)**: сначала забираем широкий набор
+  кандидатов, чтобы не потерять релевантный чанк из-за грубого top-5.
+* **Threshold** отбрасывает заведомо слабые кандидаты **до** передачи в LLM.
+  Кандидат на самом пороге считается принятым (`score >= threshold`).
+* **Rejected chunks не удаляются бесследно**: результат хранит полный trace
+  (`retrieved_candidates`, `accepted_candidates`, `rejected_candidates`,
+  `context_chunks`), а reason = `below_similarity_threshold`.
+* Если порог не прошёл **ни один** чанк — `no_relevant_context = true`,
+  rejected-чанки **не возвращаются** в контекст. Полноценная политика «не знаю»
+  — это Day 24.
+* Query rewrite при недоступности модели не ломает запрос:
+  `rewritten_query = original_question`, `rewrite.applied = false`,
+  `rewrite.error` с причиной.
+
+### Как выбран default threshold
+
+Порог `0.50` выбран по реальным 10 контрольным вопросам Day 22 и индексу
+Day 21. Минимальный score лучшего эталонного чанка — **0.5102** (q02),
+максимальный — **0.7602**. Sweep порога при `retrieval_top_k = 20`:
+
+| threshold | kept / 200 | expected kept | вопросов с best expected в финале |
+|-----------|-----------:|--------------:|----------------------------------:|
+| 0.48      | 168        | 40 / 51       | 10 / 10 |
+| **0.50**  | **131**    | **30 / 51**   | **10 / 10** |
+| 0.51      | 114        | 25 / 51       | 10 / 10 |
+| 0.52      | 94         | 21 / 51       | 9 / 10  |
+| 0.55      | 44         | 16 / 51       | 9 / 10  |
+
+`0.50` — максимальное круглое значение, при котором эталонный источник всех
+10 вопросов остаётся в финальном контексте, а длинный хвост слабых кандидатов
+(69/200) отбрасывается. UI содержит `Threshold score report` с этой статистикой.
+
+### Web interface
+
+* **Question** и recommended demo question по умолчанию;
+* **Mode**: `Baseline RAG (Day 22)` / `Improved RAG (Day 23)`;
+* **Improved settings**: `Retrieval Top-K` (1..50), `Similarity Threshold`
+  (0..1), `Final Top-K` (1..20);
+* **Ask** и **Compare Baseline vs Improved**;
+* блоки `ORIGINAL QUERY` / `REWRITTEN QUERY`;
+* статистика `RETRIEVED / PASSED FILTER / USED BY LLM / REJECTED`;
+* кандидаты до фильтрации со статусами
+  (`✓ USED`, `✓ RELEVANT not used: final_top_k limit`, `✕ BELOW THRESHOLD`);
+* сворачиваемый `Rejected chunks (N)` с reason;
+* `FINAL CONTEXT` и две колонки baseline vs improved;
+* подвкладка **Evaluation** с теми же 10 вопросами, независимыми
+  PASS/PARTIAL/FAIL для baseline и improved и `Expected Source Hit Rate`.
+
+### API
+
+```text
+GET  /api/week5/day23/status
+POST /api/week5/day23/ask
+POST /api/week5/day23/compare
+GET  /api/week5/day23/evaluation/questions
+GET  /api/week5/day23/evaluation/scores
+POST /api/week5/day23/evaluation/run/{id}
+POST /api/week5/day23/evaluation/run-all
+GET  /api/week5/day23/evaluation/results
+PUT  /api/week5/day23/evaluation/result/{id}
+```
+
+Baseline single ask переиспользует `POST /api/week5/day22/ask` с `mode=rag`;
+отдельный endpoint не создаётся.
+
+### Evaluation (real run)
+
+Используется тот же dataset `data/day22/evaluation_questions.json`. Day 23
+хранит свои grades отдельно (`data/day23/evaluation_results.json`), чтобы не
+перезаписывать Day 22.
+
+| ID | baseline src | improved src | baseline | improved |
+|----|:---:|:---:|:---:|:---:|
+| q01 | yes | yes | PASS | PASS |
+| q02 | yes | no | PASS | FAIL |
+| q03–q09 | yes | yes | PASS | PASS |
+| q10 | yes | yes | PASS | PARTIAL |
+
+```text
+Baseline Expected Source Hit Rate: 10 / 10
+Improved Expected Source Hit Rate:  9 / 10
+```
+
+Improved **не** объявляется лучше автоматически. Реальное наблюдение: rewrite
+на q02 понизил score нужного manual-чанка (0.5102 → 0.4842), он не прошёл порог
+`0.50`, и improved ответил «в контексте нет информации». При этом q04 показал
+очистку контекста (20 → 2 кандидата, 18 rejected).
+
+### Recommended Day 23 demo question
+
+```text
+Какая жидкость ATF и какой объём предусмотрены для автоматической
+коробки передач Xpander?
+```
+
+На нём наглядно видно `20 retrieved → 2 passed → 2 used → 18 rejected`,
+ORIGINAL/REWRITTEN query и раскрываемые rejected chunks.
+
+### Day 23 Video Demo
+
+1. Открыть Web UI → вкладку `Day 23 — Improved RAG`.
+2. Ввести **Recommended demo question**.
+3. `Mode = Baseline RAG`, нажать `Ask`: показать original query, Top-5 и ответ.
+4. `Mode = Improved RAG`, нажать `Ask`: показать original/rewritten query,
+   `20 retrieved → threshold 0.50 → N accepted → 5 used`.
+5. Раскрыть `Rejected chunks (N)` и показать score/source/reason.
+6. Нажать `Compare Baseline vs Improved` — показать две колонки.
+7. Открыть **Evaluation**, нажать `Run all 10 questions`.
+8. Показать PASS/PARTIAL/FAIL и `Expected Source Hit Rate` для baseline и
+   improved, а также `Threshold score report`.
+
+### Ограничения Day 23
+
+Намеренно отсутствуют (это Day 24–25): обязательные citations/quotes внутри
+ответа, строгая пользовательская политика «не знаю», source verification
+генеративного ответа, cross-encoder reranker.
+
+## Week 5 / Day 24 — Grounded RAG and Anti-Hallucination
+
+Day 24 добавляет к Day 23 вопрос **«можем ли мы доказать ответ этими
+chunks?»**. Вкладка **`Day 24 — Grounded RAG`**. Каждый успешный ответ содержит
+реальный source, реальный `chunk_id` и проверяемую цитату; при недостатке
+контекста система детерминированно отвечает «не знаю».
+
+### Architecture
+
+```text
+Question
+   ↓
+Day 23 Improved Retrieval (rewrite → vector search → similarity filter)
+   ↓
+Grounding Gate
+├── insufficient → refuse (NO LLM generation)
+└── sufficient
+       ↓
+   Grounded LLM (JSON: answer + chunk_id + quote)
+       ↓
+   Citation Validator (backend)
+       ↓
+   Answer + Sources + Quotes
+```
+
+LLM **не** является source of truth для source/file/page/section/message_ids/
+chunk_id metadata. LLM может только сослаться на существующий `chunk_id` и
+привести точную цитату; реальные metadata backend привязывает сам,
+переиспользуя Day 21 index и Day 23 improved retrieval без изменений.
+
+### Anti-hallucination layers
+
+1. **Layer 1 — Retrieval Filter (Day 23).** Слабые chunks не попадают в context.
+2. **Layer 2 — Grounding Gate.** `accepted_context not empty AND best score >=
+   answer threshold`. Если условие не выполнено, generation LLM **не
+   вызывается**, возвращается `status = insufficient_context` с пустыми
+   `sources`/`citations` и просьбой уточнить вопрос.
+3. **Layer 3 — Citation Validator.** `chunk_id` должен присутствовать в
+   context, `quote` — быть точным фрагментом текста этого chunk (после
+   нормализации whitespace). Metadata берётся из chunk, а не из ответа LLM.
+
+### Retrieval union (rewrite robustness)
+
+Query rewrite иногда ухудшает retrieval: вопрос «Какое масло заливать, что
+пишут в телеграм?» по исходной формулировке находит релевантный
+Telegram-чанк, а после rewrite — нет. Поэтому grounded-режим объединяет
+кандидатов двух поисков — по rewritten query и по исходному вопросу
+(`merge_original_query=True`): union by `chunk_id` (max score) → filter → gate.
+Day 23 improved pipeline не изменён, score не понижается. Все negative-вопросы
+остаются < `0.50` и в исходной формулировке, поэтому детерминированный отказ
+сохраняется.
+
+### Answer threshold
+
+Отдельный второй порог не вводится: gate использует тот же
+`RAG_SIMILARITY_THRESHOLD` (default `0.50`), что и retrieval filter. Все 10
+контрольных вопросов имеют top-1 score ≥ 0.516, а negative-вопросы — &lt; 0.50.
+Порог для ответа можно поднять тем же параметром `similarity_threshold`.
+
+### Result statuses
+
+* `answered` — ответ + минимум один evidence + все цитаты валидны;
+* `insufficient_context` — gate отказал или LLM отказался; sources/citations
+  пусты;
+* `grounding_failed` — ответ сгенерирован, но evidence validation не прошла
+  (невалидный `chunk_id` или неточная цитата).
+
+### Web interface
+
+* **Grounded Ask** — вопрос, retrieval/answer threshold, `Ask grounded`;
+  результат: `ANSWER` + `EVIDENCE` с типом источника
+  (`MANUAL / TECHNICAL SOURCE` или `COMMUNITY / TELEGRAM`), `chunk_id`, page/
+  section или message_ids, цитатой, `quote verified: YES/NO`, кнопкой
+  `Show full chunk` и блоком `Grounding validation: PASSED/FAILED`.
+  Для отказа — блок `INSUFFICIENT CONTEXT` c `Best score`, `Required
+  threshold`, `Retrieved`, `Passed filter` и `Generation LLM invoked: NO`.
+* **Evaluation** — 10 контрольных вопросов: sources/quotes/quotes valid +
+  ручной `PASS/PARTIAL/FAIL` (Answer supported by evidence) и summary.
+* **Refusal / Anti-hallucination** — negative-вопросы, `correctly refused`,
+  `incorrectly answered`, `LLM invoked`.
+
+### API
+
+```text
+GET  /api/week5/day24/status
+POST /api/week5/day24/ask
+GET  /api/week5/day24/evaluation/questions
+POST /api/week5/day24/evaluation/run/{id}
+POST /api/week5/day24/evaluation/run-all
+GET  /api/week5/day24/evaluation/results
+PUT  /api/week5/day24/evaluation/result/{id}
+GET  /api/week5/day24/negative/questions
+POST /api/week5/day24/negative/run-all
+GET  /api/week5/day24/negative/report
+```
+
+### Evaluation (real run)
+
+| ID | status | sources | quotes | quotes valid | supported |
+|----|--------|:---:|:---:|:---:|:---:|
+| q01 | answered | YES | YES | YES | PASS |
+| q02 | insufficient_context | NO | NO | NO | — |
+| q03 | answered | YES | YES | YES | PASS |
+| q04 | answered | YES | YES | YES | PASS |
+| q05 | answered | YES | YES | YES | PASS |
+| q06 | grounding_failed | YES | YES | NO | — |
+| q07 | answered | YES | YES | YES | PASS |
+| q08 | answered | YES | YES | YES | PASS |
+| q09 | answered | YES | YES | YES | PASS |
+| q10 | answered | YES | YES | YES | PASS |
+
+```text
+Sources present:   9 / 10
+Quotes present:    9 / 10
+Quotes verified:   8 / 10
+Answer supported:  PASS 8 · PARTIAL 0 · FAIL 0
+```
+
+Честные наблюдения: на q02 rewrite не поднял нужный manual-чанк, и LLM сам
+вернул `insufficient_context`; на q06 одна из цитат не совпала с текстом
+chunk, и validator вернул `grounding_failed` (неподтверждённая цитата не
+проходит). Подробнее — `docs/week5/day24.md`.
+
+### Negative evaluation (anti-hallucination metric)
+
+```text
+Negative questions:    5
+Correctly refused:     5 / 5
+Incorrectly answered:  0 / 5
+Generation LLM invoked: 0 / 5
+```
+
+Dataset `data/day24/negative_questions.json` — реалистичные автомобильные
+вопросы вне knowledge base (например, «Как выполняется адаптация вариатора
+Xpander диагностическим сканером?», «Сколько литров масла в двигателе Hyundai
+Creta?»). Для каждого top-1 retrieval score проверен и ниже порога, поэтому
+отказ детерминированный и generation LLM не вызывается.
+
+### Recommended demo questions
+
+```text
+Demo A (manual):
+  Какое давление должно быть в шинах Mitsubishi Xpander размера 205/55R16
+  при нагрузке 1–5 человек + груз?
+Demo B (telegram):
+  Что владельцы в Telegram называют возможной причиной того, что пластик
+  на Xpander «поплыл»?
+Demo C (insufficient):
+  Как выполняется адаптация вариатора Xpander диагностическим сканером?
+```
+
+### Day 24 Video Demo
+
+1. Открыть вкладку `Day 24 — Grounded RAG`.
+2. **Demo A (manual)**: нажать `Ask grounded`. Показать `answer`, `MANUAL /
+   TECHNICAL SOURCE`, page/section, `chunk_id`, `quote verified: YES`, раскрыть
+   `Show full chunk` и показать, что цитата находится внутри chunk.
+3. **Demo B (telegram)**: показать `COMMUNITY / TELEGRAM`, `message_ids`,
+   цитату и формулировку ответа как опыта владельцев.
+4. **Demo C (insufficient)**: показать `INSUFFICIENT CONTEXT`, `Best score`,
+   `Required threshold`, `Passed filter: 0` и `Generation LLM invoked: NO`.
+5. Открыть **Evaluation**, `Run all 10 questions`, показать таблицу и summary
+   (`Sources present`, `Quotes present`, `Quotes verified`, `Answer supported`).
+6. Открыть **Refusal / Anti-hallucination**, `Run negative questions`,
+   показать `Correctly refused 5 / 5` и `LLM invoked 0`.
+
+### Environment variables (Day 24)
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `RAG_DAY24_RESULTS_PATH` | `data/day24/evaluation_results.json` | Day 24 auto checks + manual grades |
+| `RAG_DAY24_NEGATIVE_PATH` | `data/day24/negative_questions.json` | Day 24 negative questions |
+| `RAG_DAY24_DEMO_QUESTION_MANUAL` | pressure question | Demo A |
+| `RAG_DAY24_DEMO_QUESTION_TELEGRAM` | plastic question | Demo B |
+| `RAG_DAY24_DEMO_QUESTION_INSUFFICIENT` | CVT adaptation question | Demo C |
+
+### Day 24 — Clickable Grounded Sources
+
+Каждый подтверждённый источник в Grounded RAG answer может иметь
+кликабельную ссылку на реальный первоисточник. URL строит **только backend**
+после citation validation — LLM никогда не генерирует и не возвращает URL.
+
+```text
+Grounded Answer
+      ↓
+Validated Evidence
+      ↓
+SourceLinkResolver
+      ├── manual   → secure local PDF route + #page
+      └── telegram → Telegram permalink
+      ↓
+Clickable Source Cards
+```
+
+**Manual.** chunk metadata `source` — голое имя файла. Ссылка имеет вид
+`/api/rag/sources/manual/<url-encoded file>#page=N` (`page`, иначе `page_from`;
+без страницы — без фрагмента). Отдельный backend route отдаёт PDF с
+`application/pdf`, разрешая только файлы **непосредственно внутри**
+`RAG_MANUAL_PATH`; `../`, `..\\`, скрытые файлы, не-PDF и произвольные пути
+отклоняются с `404`. Windows-путь браузеру не раскрывается.
+
+**Telegram.** Приоритет стратегий:
+
+| # | Strategy | URL |
+|---|----------|-----|
+| A | `RAG_TELEGRAM_CHAT_LINK_BASE` (http(s)) | `<base>/<message_id>` |
+| B | валидный `username` из export | `https://t.me/<username>/<mid>` |
+| C | supergroup/channel id | `https://t.me/c/<id>/<mid>` |
+| D | невозможно доказать | `null` |
+
+В реальном `result.json` нет отдельного поля `username`, но публичный
+username подтверждается существующими ссылками. Поэтому base задаётся
+конфигом (источник истины — config, не title):
+
+```env
+RAG_TELEGRAM_CHAT_LINK_BASE=https://t.me/xpanderRU
+```
+
+В Docker `docker-compose.yml` пробрасывает `RAG_TELEGRAM_CHAT_LINK_BASE` в
+контейнер и монтирует `docs/xpander/manual` и `docs/xpander/ChatExport`
+read-only, иначе base теряется (`.env` в образ не попадает) и manual PDF /
+quote → message mapping недоступны. Проверка: `docker compose config`.
+
+Username никогда не выводится из названия чата. Для forum topic используется
+`<base>/<topic_id>/<message_id>` (при наличии `topic_id`), иначе
+`<base>/<message_id>`. Для `/c/` UI показывает
+`Requires access to the Telegram chat`.
+
+`cited_message_id` определяется точным сопоставлением нормализованной цитаты
+с конкретным сообщением (backend перечитывает export). Пример: для chunk
+`bbb8e3a96e65` с `message_ids [83467, 83468]` цитата из 83468 даёт
+`https://t.me/xpanderRU/83468`, а 83467 — context link. Если сопоставить
+нельзя — используется conversation anchor и честная подпись
+`discussion from message N`. `cited_message_id` всегда входит в
+`message_ids` chunk. Для каждого message id backend строит ссылку и отдаёт
+`context_links` с флагом `is_cited`. Reindex для этого **не требуется**:
+ссылки строятся из export + config поверх существующего Day 21 index.
+
+**UI.** Сразу под ответом — компактный список `SOURCES` с эмодзи
+(`📎` manual / `💬` Telegram); **заголовок source card кликабельный**, когда
+URL разрешён. Ниже — полный `EVIDENCE` block с `Section`, `Chunk`,
+`quote verified: YES` и context links по остальным сообщениям chunk.
+Sources дедуплицируются по `(source_type, chunk_id, cited_message_id)`, все
+цитаты сохраняются. Внешние ссылки открываются с
+`target="_blank" rel="noopener noreferrer"`. Источник без надёжного URL
+остаётся читаемым, но не кликабельным.
+
+### Ограничения Day 24
+
+* Gate опирается на similarity threshold; при высоком baseline similarity
+  пограничные вопросы обрабатываются grounded LLM и validator-ом.
+* Semantic support оценивается вручную; partial answer не реализован.
+
+## Week 5 / Day 25 — RAG Chat with Task Memory
+
+Day 24 сделал **один** RAG-ответ проверяемым и grounded. Day 25 делает
+**stateful весь диалог**: ассистент помнит, чего пытается добиться
+пользователь, какие факты уже установлены и какие ограничения действуют,
+использует эту память для нового retrieval и продолжает подтверждать
+технические ответы реальными источниками. Вкладка **`Day 25 — RAG Chat &
+Memory`**.
+
+### Architecture
+
+```text
+User Message
+     ↓
+Load Chat Session
+     ↓
+Load Task State
+     ↓
+Save User Message
+     ↓
+Task State Updater
+     ↓
+Contextual Query Builder
+     ↓
+Day 23 Improved Retrieval
+     ↓
+Day 24 Grounding Gate
+     ├── insufficient → grounded refusal
+     └── sufficient
+            ↓
+      Prompt Builder
+      ├── Task State
+      ├── Recent History
+      ├── RAG Evidence
+      └── Current Message
+            ↓
+      Grounded Generation
+            ↓
+      Citation Validation
+            ↓
+      Save Assistant Message
+            ↓
+      Save Evidence + Task State
+            ↓
+      Web UI
+```
+
+Ничего из Day 21–24 не переписано: Day 25 использует тот же `RagAnswerService`
+(Day 23 improved retrieval) и тот же `GroundedRagService` (gate + citation
+validator). Добавлены только sessions, history, task memory и Contextual Query
+Builder.
+
+### Memory model — три РАЗНЫХ типа контекста
+
+Эти слои нельзя смешивать:
+
+| Слой | Что хранит | Где живёт |
+|------|-----------|-----------|
+| **Conversation History** | сырые сообщения `user`/`assistant` | `chat_messages` (SQLite) |
+| **Recent Context** | последние N сообщений, уходят в prompt | `DAY25_RECENT_MESSAGES` (default 6) |
+| **Task State** | структурированные долгоживущие факты: goal, vehicle, known facts, constraints, terms, checks, results, hypotheses, open questions | `task_states.state_json` (SQLite, JSON) |
+| **RAG Context** | chunks, найденные заново для текущего вопроса | Day 21 vector index |
+
+* **short-term** = recent conversation (окно N сообщений);
+* **long-term structured task memory** = Task State (переживает перезапуск,
+  не индексируется embeddings и не смешивается с manuals/Telegram);
+* Task State — **производная** память: оригинальные сообщения всегда
+  сохраняются, поэтому при ошибке updater исходный диалог доступен.
+
+### Persistence
+
+```text
+Chat DB path : data/day25/chat.sqlite3   (DAY25_CHAT_DB_PATH)
+tables       : chat_sessions, chat_messages, task_states, message_evidence
+```
+
+* Chat DB — отдельный файл, **не** Day 21 vector index.
+* Schema init детерминированный (`CREATE TABLE IF NOT EXISTS`, версия в
+  `day25_schema`), выполняется лениво при первом обращении.
+* Lifecycle: `+ New Chat` создаёт session + пустой Task State; resume читает
+  messages, task state и сохранённые evidence без повторного retrieval.
+
+### Task State schema
+
+```json
+{
+  "goal": null,
+  "vehicle": {
+    "model": "Mitsubishi Xpander",
+    "year": null,
+    "engine": null,
+    "transmission": null,
+    "mileage_km": null
+  },
+  "known_facts": [{"text": "...", "key": "vehicle_mileage_km", "origin": "user"}],
+  "constraints": [],
+  "terms": [],
+  "checks_performed": [{"text": "...", "origin": "user"}],
+  "results": [{"text": "...", "origin": "user"}],
+  "hypotheses": [{"text": "...", "origin": "user"}],
+  "open_questions": []
+}
+```
+
+Updater умеет: `ADD/UPDATE/SUPERSEDE fact`, `ADD constraint/term/check/result/`
+`hypothesis`, `UPDATE goal`, `ADD/REMOVE open question`, `update_vehicle`.
+
+Правила:
+
+* **не выдумывать факты**: «Наверное, виновата подушка двигателя» →
+  `hypotheses`, а НЕ `known_facts` / confirmed cause;
+* **corrections**: «Пробег 82 тысячи» → «Посмотрел документы — 92 тысячи»
+  означает `mileage_km = 92000`; старое значение заменяется, а не копится;
+* **contradictions** (было «на P вибрации нет», стало «на P тоже вибрирует»)
+  обновляют активный факт, два противоречащих не остаются одновременно;
+* при смене goal task-specific факты старой задачи не смешиваются с новой
+  (vehicle-level факты сохраняются; сообщения остаются в истории).
+
+### Chat pipeline (один user message)
+
+1. загрузить session + Task State;
+2. сохранить user message;
+3. обновить Task State (при ошибке — предыдущий валидный state, ошибка в trace);
+4. классифицировать turn (`fact_update` / `question` / `correction` /
+   `goal_change`);
+5. построить contextual query: `current message + task state`;
+6. для содержательного вопроса: Day 23 improved retrieval → Day 24 gate;
+   gate insufficient → grounded refusal, иначе grounded LLM → citation validator;
+7. сохранить assistant message + evidence + обновлённый Task State.
+
+Информационные turn-ы (`Пробег 82 тысячи.`) прежде всего обновляют память и
+получают короткое подтверждение без принудительного citation-ответа.
+
+### Contextual Query Builder — реальный пример
+
+```text
+Current message:
+  "А что тогда проверить первым?"
+
+Task State:
+  goal = diagnose vibration in Drive
+  vehicle: Mitsubishi Xpander, CVT, 92000 km
+  known_facts: vibration in D, stronger when cold, ...
+
+Contextual query:
+  "А что тогда проверить первым?
+   task: diagnose vibration in Drive
+   Mitsubishi Xpander transmission CVT mileage 92000 km
+   known context: вибрация на D; сильнее на холодную; ..."
+```
+
+Дальше этот self-contained query уходит в Day 23 rewrite/retrieval. Вся
+история (15 сообщений) в retrieval query **не** отправляется — только текущее
+сообщение + релевантный Task State. В UI в `Technical details` видны
+`Current` / `Contextual` / `Rewritten` queries и счётчики
+`Retrieved / Passed filter / Used / Grounding`.
+
+### Web UI
+
+Desktop layout: **Chat List** (слева) · **Conversation** (центр) · **Task
+State** (справа).
+
+* `+ New Chat`, список существующих чатов, удаление `×`;
+* каждый assistant ответ с `Sources (N)` (MANUAL / COMMUNITY / TELEGRAM,
+  section/page/message_ids, `chunk_id`, quote, `quote verified`, `Show full
+  chunk`);
+* Task State обновляется без reload страницы;
+* `Technical details` (collapsible) для последнего turn-а;
+* подвкладка `Day 25 Evaluation` с двумя длинными сценариями и метриками.
+
+### Scenario evaluation
+
+`data/day25/scenarios/scenario_01_diagnostics.json` (аккумулятор / холодный
+запуск) и `scenario_02_maintenance.json` (CVT / ATF). Темы выбраны по
+**реальному** содержимому базы: manual (стр. 236–237 — аккумулятор; раздел
+11-8 — ATF) и Telegram (допуск MA1, опыт владельцев). В каждом сценарии
+12 user-сообщений (assistant-сообщения не считаются), есть deliberate
+follow-up («А что проверить первым?», «А эта рекомендация подходит для моей
+коробки?») и correction пробега.
+
+Метрики (`data/day25/evaluation_results.json`):
+
+```text
+Turns completed / total
+Goal retained: PASS / FAIL
+Facts retained / expected  (Memory Retention)
+Corrections applied / expected
+Contextual follow-ups resolved / total
+Grounded answers
+Answers with sources / grounded answers
+Quotes valid / grounded answers
+Insufficient-context turns
+Correct refusals
+```
+
+`Memory Retention` — project-specific метрика, не академическая. Запуск:
+
+```powershell
+python -m app.services.day25 list
+python -m app.services.day25 run scenario_01_diagnostics
+python -m app.services.day25 run-all
+```
+
+или кнопкой `Run scenario` во вкладке `Day 25 Evaluation`.
+
+#### Реальный прогон (Ollama `qwen2.5:3b`, `DAY25_STATE_EXTRACTOR=rules`)
+
+Запуск: `RAG_GENERATION_PROVIDER=ollama RAG_GENERATION_MODEL=qwen2.5:3b`,
+индекс Day 21 (`bge-m3`, 929 chunks), 12 + 12 user-turn-ов. Результаты из
+`data/day25/evaluation_results.json` без ручной правки:
+
+| Scenario | Turns | Goal retained | Facts retained | Corrections | Follow-ups | Grounded answers | With sources | Quotes valid | Insufficient |
+|----------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| 01 diagnostics | 12/12 | PASS | 9/9 | 1/1 | 1/1 | 1 | 1/1 | 1/1 | 1 |
+| 02 maintenance | 12/12 | PASS | 4/4 | 1/1 | 2/2 | 2 | 2/2 | 2/2 | 3 |
+
+Наблюдение (честное): локальная 3B-модель часто перефразирует цитату, из-за
+чего Day 24 citation validator закономерно возвращает `grounding_failed`, и
+число `answered` ниже, чем при более сильной модели. Именно так и должен вести
+себя grounded pipeline: неподтверждённая цитата не становится источником.
+Task state, corrections, contextual follow-ups и persistence при этом
+работают стабильно на обоих сценариях.
+
+> Требуется реальная generation-модель (`RAG_GENERATION_PROVIDER`): DeepSeek
+> key или Ollama chat-модель (`RAG_GENERATION_PROVIDER=ollama`,
+> `RAG_GENERATION_MODEL=...`). Retrieval использует `bge-m3`. Для полностью
+> offline-проверки task state можно поставить `DAY25_STATE_EXTRACTOR=rules`
+> (детерминированный extractor), но grounded generation всё равно требует
+> chat-модель.
+
+### API
+
+```text
+GET    /api/week5/day25/status
+GET    /api/week5/day25/sessions
+POST   /api/week5/day25/sessions
+GET    /api/week5/day25/sessions/{id}
+DELETE /api/week5/day25/sessions/{id}
+POST   /api/week5/day25/sessions/{id}/messages
+GET    /api/week5/day25/sessions/{id}/state
+GET    /api/week5/day25/evaluation/scenarios
+POST   /api/week5/day25/evaluation/run/{scenario_id}
+GET    /api/week5/day25/evaluation/results
+```
+
+### Environment variables (Day 25)
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `DAY25_CHAT_DB_PATH` | `data/day25/chat.sqlite3` | Chat sessions / messages / state / evidence |
+| `DAY25_RECENT_MESSAGES` | `6` | Recent conversation window |
+| `DAY25_STATE_EXTRACTOR` | `llm` | `llm` или `rules` |
+| `DAY25_SCENARIOS_PATH` | `data/day25/scenarios` | Scenario files |
+| `DAY25_EVAL_RESULTS_PATH` | `data/day25/evaluation_results.json` | Persisted metrics |
+| `RAG_CONTEXT_EXPANSION_ENABLED` | `true` | Add same-document manual neighbours |
+| `RAG_CONTEXT_EXPANSION_RADIUS` | `1` | Neighbour radius |
+| `RAG_CONTEXT_EXPANSION_MAX` | `4` | Max neighbours per turn |
+| `RAG_CONTEXT_EXPANSION_MIN_SCORE` | `0.55` | Min anchor score to expand |
+| `RAG_CHAT_SIMILARITY_THRESHOLD` | `0.50` | Optional chat-only threshold |
+
+### Day 25 Video Demo (сценарий)
+
+1. Открыть вкладку `Day 25 — RAG Chat & Memory`.
+2. `+ New Chat`.
+3. Задать первый диагностический вопрос — показать grounded answer + Sources.
+4. Сообщить несколько фактов (год, пробег, условие) — показать обновление
+   Task State справа.
+5. Задать неполный follow-up «А что тогда проверить первым?» — открыть
+   `Technical details`, показать `current query`, `contextual query`,
+   `rewritten query` и объяснить, что retrieval восстановил контекст через
+   Task State.
+6. Раскрыть `Sources` — показать Day 24 citations.
+7. Перезагрузить приложение, открыть тот же chat — показать, что history,
+   state и sources сохранились.
+8. Продолжить conversation.
+9. Открыть `Day 25 Evaluation` — показать оба сценария.
+
+### Multi-turn follow-ups (контекстный retrieval)
+
+Короткий follow-up («что делать?», «как установить?») до retrieval обогащается
+текущей темой разговора, предыдущим вопросом и темой предыдущего grounded-
+источника. Порядок: `current message + active_topic + previous question +
+previous evidence topic + goal/vehicle/facts` → contextual query → Day 23
+rewrite → fresh vector search. `active_topic` хранится в Task State и
+обновляется после turn-а: follow-up сохраняет тему, явная смена задачи
+(«с этим закончили, теперь…») её заменяет, обычное уточнение НЕ меняет goal и
+НЕ очищает память. Для сильных manual-хитов добавляются соседние chunks того
+же документа (реальные, с настоящими `chunk_id`). Детали — `docs/week5/day25.md`.
+
+Day 25 opt-in (Day 24 standalone не меняется): `resolve_quote_chunk`
+пере-привязывает дословную цитату к правильному context-chunk, а
+`allow_partial_citations` принимает частичный grounded-ответ, если хотя бы
+одна цитата валидна (пересказ по-прежнему отклоняется). Порог
+`RAG_SIMILARITY_THRESHOLD` не понижался.
+
+### Ограничения Day 25
+
+* LLM task-state extractor может ошибаться; поэтому Task State — производная
+  память, оригинальные сообщения сохраняются, а при ошибке updater остаётся
+  предыдущий валидный state.
+* Автоматически проверяется структура (state/corrections/contextual query/
+  sources/quotes). Смысловая оценка goal retention и support остаётся ручной;
+  LLM-judge не вводится.
+* `DAY25_STATE_EXTRACTOR=rules` — разумный offline fallback, но он понимает
+  только типовые формулировки.
+
+## Product page `/xpander` — Mitsubishi Xpander Assistant
+
+Отдельная пользовательская страница (не вкладка лаборатории):
+
+```text
+http://localhost/xpander      (в dev — http://localhost:8000/xpander)
+```
+
+Страница выглядит как законченный автомобильный ассистент и **не показывает**
+Week 5 / Day 21–25 / RAG / Task State / Technical details. Она переиспользует
+tот же backend: `Day25ChatService` (sessions, task memory, grounded answers,
+sources/citations).
+
+* **Hero** — локальный баннер
+  `app/static/assets/xpander/xpander_main_banner.png` (при отсутствии —
+  SVG-фоллбэк `hero-fallback.svg`).
+* **Topic cards** — 6 реальных HTML/CSS карточек; клик создаёт новый чат и
+  подставляет вопрос темы.
+* **Layout** — `chat list | chat | current topic`; tablet складывает current
+  topic ниже, mobile превращает список чатов в drawer.
+* **Current topic** — user-friendly сводка из task state: тема, автомобиль,
+  «Что уже известно», «Похожие темы».
+* **Sources** — сворачиваемый блок `Источники (N)` с карточками evidence
+  (source, section/page или message IDs, quote, полный фрагмент).
+* **API facade** — `/api/xpander/*` делегирует в существующий сервис без
+  изменения бизнес-логики.
+* **Permalink** — `/xpander?session=<id>` открывает конкретный чат;
+  `/xpander?expandSources=1` раскрывает блоки источников.
+
+Assets и их назначение описаны в
+`app/static/assets/xpander/README.md`. Положите 4 подготовленных PNG с
+указанными именами — страница подхватит их автоматически.
+
+### Скриншоты
+
+```text
+docs/week5/xpander-desktop.png
+docs/week5/xpander-tablet.png
+docs/week5/xpander-mobile.png
+```
+
 ## Environment variables
 
 | Variable                    | Default                    | Purpose                          |
@@ -1936,6 +3091,28 @@ curl -X DELETE http://127.0.0.1:8000/api/day15/task
 | `SYSTEM_PROMPT`             | built-in                   | Default system prompt            |
 | `APP_NAME`                  | `LLM Agent Lab`            | Title shown on the homepage      |
 | `ENVIRONMENT`               | `development`              | Runtime environment label        |
+| `RAG_MANUAL_PATH`           | `docs/xpander/manual`      | Day 21 manuals directory         |
+| `RAG_TELEGRAM_EXPORT_PATH`  | `docs/xpander/ChatExport`  | Day 21 Telegram JSON dir        |
+| `RAG_CHUNK_SIZE`            | `1200`                     | Day 21 fixed chunk size          |
+| `RAG_CHUNK_OVERLAP`         | `200`                      | Day 21 fixed chunk overlap       |
+| `RAG_EMBEDDING_PROVIDER`    | `auto`                     | Day 21 embeddings (ollama/…)     |
+| `RAG_EMBEDDING_MODEL`       | `bge-m3`                   | Day 21 Ollama embedding model    |
+| `RAG_INDEX_PATH`            | `data/day21/rag_index.sqlite3` | Day 21 persistent index      |
+| `RAG_FIXED_INDEX_PATH`      | `data/day21/rag_index_fixed.sqlite3` | Day 21 fixed-strategy index |
+| `RAG_GENERATION_PROVIDER`   | `deepseek`                 | Day 22 generation provider (`deepseek`/`ollama`) |
+| `RAG_GENERATION_MODEL`      | *(provider default)*       | Day 22 generation model      |
+| `RAG_GENERATION_TEMPERATURE`| `0.0`                      | Day 22 shared temperature    |
+| `RAG_GENERATION_MAX_TOKENS` | `1024`                     | Day 22 generation output cap |
+| `RAG_TOP_K`                 | `5`                        | Day 22 default Top-K (1..20) |
+| `RAG_CONTEXT_MAX_CHARS`     | `12000`                    | Day 22 context cap           |
+| `RAG_DAY22_EVALUATION_PATH` | `data/day22/evaluation_questions.json` | Day 22 control questions |
+| `RAG_DAY22_RESULTS_PATH`    | `data/day22/evaluation_results.json`   | Day 22 manual grades     |
+| `RAG_RETRIEVAL_TOP_K`       | `20`                       | Day 23 initial candidates (1..50) |
+| `RAG_FINAL_TOP_K`           | `5`                        | Day 23 chunks sent to LLM (1..20) |
+| `RAG_SIMILARITY_THRESHOLD`  | `0.50`                     | Day 23 relevance filter (0..1)   |
+| `RAG_REWRITE_MAX_TOKENS`    | `200`                      | Day 23 query-rewrite output cap  |
+| `RAG_DAY23_RESULTS_PATH`    | `data/day23/evaluation_results.json` | Day 23 manual grades |
+| `RAG_DAY23_DEMO_QUESTION`   | ATF demo question          | Day 23 recommended demo question |
 
 ## Local installation
 

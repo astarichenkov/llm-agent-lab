@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 620" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Mitsubishi Xpander">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0b0e12"/>
+      <stop offset="0.55" stop-color="#121821"/>
+      <stop offset="1" stop-color="#1a222c"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.68" cy="0.32" r="0.7">
+      <stop offset="0" stop-color="#33445c" stop-opacity="0.55"/>
+      <stop offset="0.6" stop-color="#1a2432" stop-opacity="0.15"/>
+      <stop offset="1" stop-color="#0b0e12" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="car" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a424e"/>
+      <stop offset="0.5" stop-color="#232a34"/>
+      <stop offset="1" stop-color="#12161c"/>
+    </linearGradient>
+    <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#10151c"/>
+      <stop offset="1" stop-color="#080a0e"/>
+    </linearGradient>
+    <linearGradient id="red" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#e60012" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#ff1e35" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#e60012" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="frost" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7f8ea3" stop-opacity="0.25"/>
+      <stop offset="1" stop-color="#7f8ea3" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="vignette" cx="0.5" cy="0.5" r="0.75">
+      <stop offset="0.6" stop-color="#000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0.55"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1600" height="620" fill="url(#sky)"/>
+  <rect width="1600" height="620" fill="url(#glow)"/>
+
+  <!-- distant mountains -->
+  <path d="M0 420 L210 300 L360 400 L560 250 L760 410 L980 280 L1200 420 L1400 320 L1600 430 L1600 620 L0 620 Z"
+        fill="#0e131a"/>
+  <path d="M0 470 L240 380 L430 460 L680 350 L900 470 L1140 390 L1360 480 L1600 410 L1600 620 L0 620 Z"
+        fill="#0b0f15"/>
+
+  <!-- red horizon accent -->
+  <rect x="120" y="452" width="1360" height="2" fill="url(#red)"/>
+
+  <!-- ground -->
+  <rect y="470" width="1600" height="150" fill="url(#ground)"/>
+
+  <!-- road perspective -->
+  <path d="M560 620 L760 474 L1180 474 L1420 620 Z" fill="#0d1117"/>
+  <path d="M690 620 L820 478 L840 478 L900 620 Z" fill="#161c24" opacity="0.8"/>
+
+  <!-- car shadow -->
+  <ellipse cx="980" cy="520" rx="330" ry="26" fill="#000" opacity="0.5"/>
+
+  <!-- SUV body -->
+  <g>
+    <path d="M636 486 L664 400 C676 372 700 358 736 358 L812 358 L866 312
+             C886 294 912 286 944 286 L1120 286 C1150 286 1176 296 1194 316
+             L1236 366 L1296 388 C1330 400 1348 424 1348 456 L1348 486 Z"
+          fill="url(#car)" stroke="#4a5563" stroke-width="2"/>
+    <!-- windows -->
+    <path d="M872 348 L918 310 C932 300 950 296 972 296 L1010 296 L1010 348 Z"
+          fill="#0c1016" opacity="0.92"/>
+    <path d="M1026 296 L1112 296 C1134 296 1152 302 1166 316 L1198 352 L1026 352 Z"
+          fill="#0c1016" opacity="0.92"/>
+    <!-- lower cladding -->
+    <path d="M636 486 L1348 486 L1348 462 L636 462 Z" fill="#141922"/>
+    <!-- headlight -->
+    <path d="M1268 374 L1330 392 L1330 408 L1262 396 Z" fill="#dfe6ef" opacity="0.85"/>
+    <!-- taillight (Mitsubishi red) -->
+    <path d="M640 392 L694 380 L694 410 L640 420 Z" fill="#e60012"/>
+    <rect x="646" y="388" width="42" height="8" rx="4" fill="#ff1e35"/>
+    <!-- wheels -->
+    <g>
+      <circle cx="790" cy="486" r="62" fill="#0a0d12"/>
+      <circle cx="790" cy="486" r="34" fill="#262d37"/>
+      <circle cx="790" cy="486" r="12" fill="#0a0d12"/>
+      <circle cx="1170" cy="486" r="62" fill="#0a0d12"/>
+      <circle cx="1170" cy="486" r="34" fill="#262d37"/>
+      <circle cx="1170" cy="486" r="12" fill="#0a0d12"/>
+    </g>
+    <!-- body highlight -->
+    <path d="M700 366 L810 366 L812 358 L736 358 C716 358 700 360 700 366 Z" fill="url(#frost)"/>
+  </g>
+
+  <!-- foreground haze -->
+  <rect y="470" width="1600" height="150" fill="url(#vignette)"/>
+  <rect width="1600" height="620" fill="url(#vignette)"/>
+</svg>

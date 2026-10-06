@@ -818,16 +818,17 @@ def test_week4_day18_enabled_and_future_days_disabled(client) -> None:
 
     day18 = re.search(r'<button[^>]*id="tab-day18"[^>]*>', html)
     assert day18 and "disabled" not in day18.group(0)
-    # Day 19 is implemented and enabled; only Day 20 stays disabled.
+    # Day 19 and Day 20 are implemented and enabled.
     day19 = re.search(r'<button[^>]*id="tab-day19"[^>]*>', html)
     assert day19 and "disabled" not in day19.group(0)
-    # Day 18 is the default (active) landing tab.
-    assert 'id="tab-day18"' in html
-    assert re.search(r'id="tab-day18"[^>]*aria-selected="true"', html)
-    assert re.search(r'id="tab-day17"[^>]*aria-selected="false"', html)
+    # Day 22 is the default (active) landing tab; Week 4 is hidden from the nav.
+    assert 'id="tab-day22"' in html
+    assert re.search(r'id="tab-day22"[^>]*aria-selected="true"', html)
+    assert re.search(r'id="tab-day21"[^>]*aria-selected="false"', html)
+    assert re.search(r'id="tab-day18"[^>]*aria-selected="false"', html)
     for day in ("day20",):
         btn = re.search(r'<button[^>]*id="tab-' + day + r'"[^>]*>', html)
-        assert btn and "disabled" in btn.group(0), f"{day} must stay disabled"
+        assert btn and "disabled" not in btn.group(0), f"{day} must be enabled"
 
 
 def test_day18_interval_and_lookback_options(client) -> None:

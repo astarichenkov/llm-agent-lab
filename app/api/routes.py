@@ -2,7 +2,7 @@
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, PlainTextResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
 from fastapi.templating import Jinja2Templates
 
 from app.config import Settings, get_settings
@@ -43,6 +43,79 @@ from app.services.mcp import MCPClient
 from app.services.day17 import Day17LogsService
 from app.services.day18 import Day18MonitoringAgentService, MonitoringService
 from app.services.day19 import Day19PipelineService, ArtifactError
+from app.services.day20 import (
+    Day20Service,
+    InvestigationArtifactError,
+)
+from app.schemas.day22 import (
+    Day22AskRequest,
+    Day22CompareRequest,
+    Day22StatusResponse,
+    EvaluationGradeRecord,
+    EvaluationQuestion,
+    EvaluationResultsResponse,
+    EvaluationRunAllResponse,
+    EvaluationRunRequest,
+    EvaluationRunResponse,
+    RAGAnswer,
+    RAGComparison,
+)
+from app.schemas.day23 import (
+    Day23AskRequest,
+    Day23CompareRequest,
+    Day23Comparison,
+    Day23EvaluationGradeRecord,
+    Day23EvaluationResultsResponse,
+    Day23EvaluationRunAllResponse,
+    Day23EvaluationRunResponse,
+    Day23ScoreReport,
+    Day23Settings,
+    Day23StatusResponse,
+    ImprovedRAGResult,
+)
+from app.schemas.day24 import (
+    Day24AskRequest,
+    Day24EvaluationGradeRecord,
+    Day24EvaluationResultsResponse,
+    Day24EvaluationRunAllResponse,
+    Day24EvaluationRunResponse,
+    Day24NegativeQuestion,
+    Day24NegativeReport,
+    Day24NegativeRunAllResponse,
+    Day24NegativeRunResponse,
+    Day24StatusResponse,
+    GroundedRAGResult,
+)
+from app.schemas.day25 import (
+    ChatSession,
+    Day25StatusResponse,
+    CreateSessionRequest,
+    Scenario,
+    ScenarioRunResult,
+    SendMessageRequest,
+    SendMessageResponse,
+    SessionDetailResponse,
+    SessionListResponse,
+    TaskStateResponse,
+)
+from app.services.rag.answer_service import RagAnswerService, RagRetrievalError
+from app.services.rag.day23_evaluation import Day23EvaluationService
+from app.services.rag.day24_evaluation import Day24EvaluationService
+from app.services.rag.evaluation import EvaluationError, EvaluationService
+from app.services.rag.generation import GenerationError
+from app.services.rag.grounding.service import GroundedRagService
+from app.services.rag.sources.manual import resolve_manual_path
+from app.services.day25 import (
+    ChatServiceError,
+    Day25ChatService,
+    Day25EvaluationService,
+    ScenarioError,
+)
+from app.schemas.day20 import (
+    Day20InvestigateRequest,
+    Day20InvestigateResponse,
+    Day20MCPStatusResponse,
+)
 from app.schemas.day19 import (
     Day19PipelineRequest,
     Day19PipelineResponse,
@@ -300,6 +373,66 @@ def get_day19_service(request: Request) -> Day19PipelineService:
     dependency to inject a fake VictoriaLogs client and a fake LLM.
     """
     return request.app.state.day19_service
+
+
+def get_day20_service(request: Request) -> Day20Service:
+    """Return the process-wide Day 20 multi-server orchestration service.
+
+    The service builds one MCP registry per request and performs unified
+    ``tools/list`` discovery across VictoriaLogs, Gitea and Reports MCP
+    servers. Tests override this dependency to inject fake MCP clients and a
+    fake LLM.
+    """
+    return request.app.state.day20_service
+
+
+def get_day22_service(request: Request) -> RagAnswerService:
+    """Return the process-wide Day 22 RAG answer service.
+
+    Owns the No-RAG/RAG pipelines over the Day 21 index. Tests override this
+    dependency to inject a fake generation provider and/or a temp index.
+    """
+    return request.app.state.day22_service
+
+
+def get_day22_evaluation_service(request: Request) -> EvaluationService:
+    """Return the process-wide Day 22 evaluation service (dataset + grades)."""
+    return request.app.state.day22_evaluation_service
+
+
+def get_day23_service(request: Request) -> RagAnswerService:
+    """Return the Day 23 answer service (same instance as Day 22).
+
+    Day 23 adds ``answer_with_improved_rag`` / ``compare_baseline_vs_improved``
+    to the existing service, so it shares the retriever and the generation
+    model with the baseline. Tests override this dependency.
+    """
+    return request.app.state.day23_service
+
+
+def get_day23_evaluation_service(request: Request) -> Day23EvaluationService:
+    """Return the Day 23 evaluation service (baseline vs improved grades)."""
+    return request.app.state.day23_evaluation_service
+
+
+def get_day24_service(request: Request) -> GroundedRagService:
+    """Return the Day 24 grounded RAG service (gate + citations)."""
+    return request.app.state.day24_service
+
+
+def get_day24_evaluation_service(request: Request) -> Day24EvaluationService:
+    """Return the Day 24 evaluation service (grounded + negative)."""
+    return request.app.state.day24_evaluation_service
+
+
+def get_day25_service(request: Request) -> Day25ChatService:
+    """Return the Day 25 stateful chat service (sessions + task memory)."""
+    return request.app.state.day25_service
+
+
+def get_day25_evaluation_service(request: Request) -> Day25EvaluationService:
+    """Return the Day 25 scenario evaluation service."""
+    return request.app.state.day25_evaluation_service
 
 
 def _agent_info(agent: Agent, settings: Settings) -> AgentInfo:
@@ -1660,3 +1793,748 @@ async def day19_artifact(
     else:
         media_type = "application/x-ndjson"
     return PlainTextResponse(content, media_type=media_type)
+
+
+# ----------------------------------------------------------------------
+# Day 20 — multi-server MCP orchestration (VictoriaLogs + Gitea + Reports)
+# ----------------------------------------------------------------------
+@router.get(
+    "/api/week4/day20/mcp/status",
+    response_model=Day20MCPStatusResponse,
+)
+async def day20_mcp_status(
+    service: Day20Service = Depends(get_day20_service),
+) -> Day20MCPStatusResponse:
+    """Discover every registered MCP server and return the unified tool set.
+
+    The backend performs a real ``tools/list`` against each server; the UI
+    renders exactly what was discovered, including the tool -> server routing
+    table. A failure of one server does not hide the others.
+    """
+    return await service.discover()
+
+
+@router.post(
+    "/api/week4/day20/investigate",
+    response_model=Day20InvestigateResponse,
+)
+async def day20_investigate(
+    payload: Day20InvestigateRequest,
+    service: Day20Service = Depends(get_day20_service),
+) -> Day20InvestigateResponse:
+    """Run one LLM-driven multi-server MCP investigation.
+
+    The order of tool calls is chosen by the model step by step based on the
+    previous tool results — it is NOT a hardcoded backend sequence. The
+    response contains the final answer, the real orchestration trace, which
+    servers/tools were used, and the saved investigation report.
+    """
+    return await service.investigate(payload)
+
+
+@router.get(
+    "/api/week4/day20/investigations/{investigation_id}/artifacts/{filename}"
+)
+async def day20_artifact(
+    investigation_id: str,
+    filename: str,
+    service: Day20Service = Depends(get_day20_service),
+) -> PlainTextResponse:
+    """Serve ONE known Day 20 investigation artifact.
+
+    ``investigation_id`` and ``filename`` are validated by the investigation
+    store; unknown names, traversal and paths outside
+    ``data/day20/investigations`` are rejected.
+    """
+    try:
+        content = service.read_artifact(investigation_id, filename)
+    except InvestigationArtifactError as exc:
+        raise HTTPException(status_code=404, detail=exc.message) from exc
+    if filename.endswith(".json"):
+        media_type = "application/json"
+    else:
+        media_type = "text/markdown"
+    return PlainTextResponse(content, media_type=media_type)
+
+
+# ----------------------------------------------------------------------
+# Day 22 — first RAG request (No-RAG vs RAG, retrieval over the Day 21 index)
+# ----------------------------------------------------------------------
+def _day22_http_error(exc: Exception) -> HTTPException:
+    """Translate a Day 22 service error into a browser-safe HTTPException."""
+    return HTTPException(status_code=getattr(exc, "status_code", 502), detail=exc.message)
+
+
+@router.get(
+    "/api/week5/day22/status",
+    response_model=Day22StatusResponse,
+)
+async def day22_status(
+    service: RagAnswerService = Depends(get_day22_service),
+) -> Day22StatusResponse:
+    """Expose the configured embedding/generation models and the index stats."""
+    return Day22StatusResponse(**service.status())
+
+
+@router.post(
+    "/api/week5/day22/ask",
+    response_model=RAGAnswer,
+)
+async def day22_ask(
+    payload: Day22AskRequest,
+    service: RagAnswerService = Depends(get_day22_service),
+) -> RAGAnswer:
+    """Answer a question in exactly one mode (``no_rag`` or ``rag``)."""
+    try:
+        if payload.mode == "rag":
+            return await service.answer_with_rag(payload.question, top_k=payload.top_k)
+        return await service.answer_without_rag(payload.question, top_k=payload.top_k)
+    except (GenerationError, RagRetrievalError) as exc:
+        raise _day22_http_error(exc) from exc
+
+
+@router.post(
+    "/api/week5/day22/compare",
+    response_model=RAGComparison,
+)
+async def day22_compare(
+    payload: Day22CompareRequest,
+    service: RagAnswerService = Depends(get_day22_service),
+) -> RAGComparison:
+    """Answer the SAME question with and without RAG using ONE generation model."""
+    try:
+        return await service.compare(payload.question, top_k=payload.top_k)
+    except (GenerationError, RagRetrievalError) as exc:
+        raise _day22_http_error(exc) from exc
+
+
+@router.get(
+    "/api/week5/day22/evaluation/questions",
+    response_model=list[EvaluationQuestion],
+)
+async def day22_evaluation_questions(
+    service: EvaluationService = Depends(get_day22_evaluation_service),
+) -> list[EvaluationQuestion]:
+    """Return the 10 control questions derived from the real Day 21 index."""
+    try:
+        return service.questions()
+    except EvaluationError as exc:
+        raise _day22_http_error(exc) from exc
+
+
+@router.post(
+    "/api/week5/day22/evaluation/run-all",
+    response_model=EvaluationRunAllResponse,
+)
+async def day22_evaluation_run_all(
+    payload: EvaluationRunRequest,
+    service: EvaluationService = Depends(get_day22_evaluation_service),
+) -> EvaluationRunAllResponse:
+    """Run every control question through No-RAG AND RAG sequentially.
+
+    Answers are returned for the user to review; no automatic grade is
+    produced. This can take a while with a remote generation model.
+    """
+    try:
+        return await service.run_all(top_k=payload.top_k)
+    except EvaluationError as exc:
+        raise _day22_http_error(exc) from exc
+    except (GenerationError, RagRetrievalError) as exc:
+        raise _day22_http_error(exc) from exc
+
+
+@router.post(
+    "/api/week5/day22/evaluation/run/{question_id}",
+    response_model=EvaluationRunResponse,
+)
+async def day22_evaluation_run(
+    question_id: str,
+    payload: EvaluationRunRequest,
+    service: EvaluationService = Depends(get_day22_evaluation_service),
+) -> EvaluationRunResponse:
+    """Run ONE control question through No-RAG AND RAG."""
+    try:
+        return await service.run(question_id, top_k=payload.top_k)
+    except EvaluationError as exc:
+        raise _day22_http_error(exc) from exc
+    except (GenerationError, RagRetrievalError) as exc:
+        raise _day22_http_error(exc) from exc
+
+
+@router.get(
+    "/api/week5/day22/evaluation/results",
+    response_model=EvaluationResultsResponse,
+)
+async def day22_evaluation_results(
+    service: EvaluationService = Depends(get_day22_evaluation_service),
+) -> EvaluationResultsResponse:
+    """Return the saved manual grades plus the summary."""
+    try:
+        return service.results()
+    except EvaluationError as exc:
+        raise _day22_http_error(exc) from exc
+
+
+@router.put(
+    "/api/week5/day22/evaluation/result/{question_id}",
+    response_model=EvaluationResultsResponse,
+)
+async def day22_evaluation_update_result(
+    question_id: str,
+    payload: EvaluationGradeRecord,
+    service: EvaluationService = Depends(get_day22_evaluation_service),
+) -> EvaluationResultsResponse:
+    """Persist a manual PASS/PARTIAL/FAIL grade for one control question."""
+    try:
+        return service.update_result(question_id, payload)
+    except EvaluationError as exc:
+        raise _day22_http_error(exc) from exc
+
+
+# ----------------------------------------------------------------------
+# Day 23 — improved RAG (query rewrite + similarity filtering)
+# ----------------------------------------------------------------------
+def _day23_http_error(exc: Exception) -> HTTPException:
+    """Translate a Day 23 service error into a browser-safe HTTPException."""
+    return HTTPException(status_code=getattr(exc, "status_code", 502), detail=exc.message)
+
+
+@router.get(
+    "/api/week5/day23/status",
+    response_model=Day23StatusResponse,
+)
+async def day23_status(
+    service: RagAnswerService = Depends(get_day23_service),
+) -> Day23StatusResponse:
+    """Expose the improved-pipeline configuration and index stats."""
+    return Day23StatusResponse(**service.status_day23())
+
+
+@router.post(
+    "/api/week5/day23/ask",
+    response_model=ImprovedRAGResult,
+)
+async def day23_ask(
+    payload: Day23AskRequest,
+    service: RagAnswerService = Depends(get_day23_service),
+) -> ImprovedRAGResult:
+    """Run the improved pipeline (rewrite -> retrieve -> filter -> answer)."""
+    try:
+        return await service.answer_with_improved_rag(
+            payload.question,
+            retrieval_top_k=payload.retrieval_top_k,
+            final_top_k=payload.final_top_k,
+            similarity_threshold=payload.similarity_threshold,
+        )
+    except (GenerationError, RagRetrievalError) as exc:
+        raise _day23_http_error(exc) from exc
+
+
+@router.post(
+    "/api/week5/day23/compare",
+    response_model=Day23Comparison,
+)
+async def day23_compare(
+    payload: Day23CompareRequest,
+    service: RagAnswerService = Depends(get_day23_service),
+) -> Day23Comparison:
+    """Run baseline (Day 22 RAG) and improved (Day 23) for one question."""
+    try:
+        return await service.compare_baseline_vs_improved(
+            payload.question,
+            retrieval_top_k=payload.retrieval_top_k,
+            final_top_k=payload.final_top_k,
+            similarity_threshold=payload.similarity_threshold,
+        )
+    except (GenerationError, RagRetrievalError) as exc:
+        raise _day23_http_error(exc) from exc
+
+
+@router.get(
+    "/api/week5/day23/evaluation/questions",
+    response_model=list[EvaluationQuestion],
+)
+async def day23_evaluation_questions(
+    service: Day23EvaluationService = Depends(get_day23_evaluation_service),
+) -> list[EvaluationQuestion]:
+    """Return the SAME 10 control questions used on Day 22."""
+    try:
+        return service.questions()
+    except EvaluationError as exc:
+        raise _day23_http_error(exc) from exc
+
+
+@router.get(
+    "/api/week5/day23/evaluation/scores",
+    response_model=Day23ScoreReport,
+)
+async def day23_evaluation_scores(
+    retrieval_top_k: int | None = Query(default=None, ge=1, le=50),
+    similarity_threshold: float | None = Query(default=None, ge=0.0, le=1.0),
+    service: Day23EvaluationService = Depends(get_day23_evaluation_service),
+) -> Day23ScoreReport:
+    """Similarity statistics used to justify the default threshold."""
+    try:
+        return service.score_distribution(
+            retrieval_top_k=retrieval_top_k, similarity_threshold=similarity_threshold
+        )
+    except (EvaluationError, RagRetrievalError) as exc:
+        raise _day23_http_error(exc) from exc
+
+
+@router.post(
+    "/api/week5/day23/evaluation/run-all",
+    response_model=Day23EvaluationRunAllResponse,
+)
+async def day23_evaluation_run_all(
+    payload: Day23Settings,
+    service: Day23EvaluationService = Depends(get_day23_evaluation_service),
+) -> Day23EvaluationRunAllResponse:
+    """Run all control questions through baseline AND improved sequentially."""
+    try:
+        return await service.run_all(
+            retrieval_top_k=payload.retrieval_top_k,
+            final_top_k=payload.final_top_k,
+            similarity_threshold=payload.similarity_threshold,
+        )
+    except EvaluationError as exc:
+        raise _day23_http_error(exc) from exc
+    except (GenerationError, RagRetrievalError) as exc:
+        raise _day23_http_error(exc) from exc
+
+
+@router.post(
+    "/api/week5/day23/evaluation/run/{question_id}",
+    response_model=Day23EvaluationRunResponse,
+)
+async def day23_evaluation_run(
+    question_id: str,
+    payload: Day23Settings,
+    service: Day23EvaluationService = Depends(get_day23_evaluation_service),
+) -> Day23EvaluationRunResponse:
+    """Run ONE control question through baseline AND improved."""
+    try:
+        return await service.run(
+            question_id,
+            retrieval_top_k=payload.retrieval_top_k,
+            final_top_k=payload.final_top_k,
+            similarity_threshold=payload.similarity_threshold,
+        )
+    except EvaluationError as exc:
+        raise _day23_http_error(exc) from exc
+    except (GenerationError, RagRetrievalError) as exc:
+        raise _day23_http_error(exc) from exc
+
+
+@router.get(
+    "/api/week5/day23/evaluation/results",
+    response_model=Day23EvaluationResultsResponse,
+)
+async def day23_evaluation_results(
+    service: Day23EvaluationService = Depends(get_day23_evaluation_service),
+) -> Day23EvaluationResultsResponse:
+    """Return saved baseline/improved grades plus the summary."""
+    try:
+        return service.results()
+    except EvaluationError as exc:
+        raise _day23_http_error(exc) from exc
+
+
+@router.put(
+    "/api/week5/day23/evaluation/result/{question_id}",
+    response_model=Day23EvaluationResultsResponse,
+)
+async def day23_evaluation_update_result(
+    question_id: str,
+    payload: Day23EvaluationGradeRecord,
+    service: Day23EvaluationService = Depends(get_day23_evaluation_service),
+) -> Day23EvaluationResultsResponse:
+    """Persist independent baseline/improved grades for one question."""
+    try:
+        return service.update_result(question_id, payload)
+    except EvaluationError as exc:
+        raise _day23_http_error(exc) from exc
+
+
+# ----------------------------------------------------------------------
+# Day 24 — grounded RAG (citations + anti-hallucination)
+# ----------------------------------------------------------------------
+def _day24_http_error(exc: Exception) -> HTTPException:
+    """Translate a Day 24 service error into a browser-safe HTTPException."""
+    return HTTPException(status_code=getattr(exc, "status_code", 502), detail=exc.message)
+
+
+@router.get(
+    "/api/rag/sources/manual/{source_id}",
+)
+async def rag_manual_source(
+    source_id: str,
+    settings: Settings = Depends(get_settings),
+) -> FileResponse:
+    """Serve a manual PDF by its BARE filename, securely.
+
+    The browser never receives a filesystem path. Only files directly inside
+    ``RAG_MANUAL_PATH`` are served; traversal, hidden files and non-PDF files
+    are rejected with a 404. A PDF page can be requested with the standard
+    ``#page=N`` fragment, which the browser's PDF viewer handles client-side.
+    """
+    target = resolve_manual_path(settings.rag_manual_path, source_id)
+    if target is None:
+        raise HTTPException(status_code=404, detail="Source not found")
+    return FileResponse(
+        str(target),
+        media_type="application/pdf",
+        filename=target.name,
+    )
+
+
+@router.get(
+    "/api/week5/day24/status",
+    response_model=Day24StatusResponse,
+)
+async def day24_status(
+    service: GroundedRagService = Depends(get_day24_service),
+) -> Day24StatusResponse:
+    """Expose the grounded-pipeline configuration and index stats."""
+    return Day24StatusResponse(**service.status())
+
+
+@router.post(
+    "/api/week5/day24/ask",
+    response_model=GroundedRAGResult,
+)
+async def day24_ask(
+    payload: Day24AskRequest,
+    service: GroundedRagService = Depends(get_day24_service),
+) -> GroundedRAGResult:
+    """Run the grounded pipeline: gate -> grounded LLM -> citation validator."""
+    try:
+        return await service.ask(
+            payload.question,
+            retrieval_top_k=payload.retrieval_top_k,
+            final_top_k=payload.final_top_k,
+            similarity_threshold=payload.similarity_threshold,
+        )
+    except (GenerationError, RagRetrievalError) as exc:
+        raise _day24_http_error(exc) from exc
+
+
+@router.get(
+    "/api/week5/day24/evaluation/questions",
+    response_model=list[EvaluationQuestion],
+)
+async def day24_evaluation_questions(
+    service: Day24EvaluationService = Depends(get_day24_evaluation_service),
+) -> list[EvaluationQuestion]:
+    """Return the SAME 10 control questions used on Day 22/23."""
+    try:
+        return service.questions()
+    except EvaluationError as exc:
+        raise _day24_http_error(exc) from exc
+
+
+@router.post(
+    "/api/week5/day24/evaluation/run-all",
+    response_model=Day24EvaluationRunAllResponse,
+)
+async def day24_evaluation_run_all(
+    payload: Day23Settings,
+    service: Day24EvaluationService = Depends(get_day24_evaluation_service),
+) -> Day24EvaluationRunAllResponse:
+    """Run all 10 control questions through the grounded pipeline."""
+    try:
+        return await service.run_all(
+            retrieval_top_k=payload.retrieval_top_k,
+            final_top_k=payload.final_top_k,
+            similarity_threshold=payload.similarity_threshold,
+        )
+    except EvaluationError as exc:
+        raise _day24_http_error(exc) from exc
+    except (GenerationError, RagRetrievalError) as exc:
+        raise _day24_http_error(exc) from exc
+
+
+@router.post(
+    "/api/week5/day24/evaluation/run/{question_id}",
+    response_model=Day24EvaluationRunResponse,
+)
+async def day24_evaluation_run(
+    question_id: str,
+    payload: Day23Settings,
+    service: Day24EvaluationService = Depends(get_day24_evaluation_service),
+) -> Day24EvaluationRunResponse:
+    """Run ONE control question through the grounded pipeline."""
+    try:
+        return await service.run(
+            question_id,
+            retrieval_top_k=payload.retrieval_top_k,
+            final_top_k=payload.final_top_k,
+            similarity_threshold=payload.similarity_threshold,
+        )
+    except EvaluationError as exc:
+        raise _day24_http_error(exc) from exc
+    except (GenerationError, RagRetrievalError) as exc:
+        raise _day24_http_error(exc) from exc
+
+
+@router.get(
+    "/api/week5/day24/evaluation/results",
+    response_model=Day24EvaluationResultsResponse,
+)
+async def day24_evaluation_results(
+    service: Day24EvaluationService = Depends(get_day24_evaluation_service),
+) -> Day24EvaluationResultsResponse:
+    """Return automatic checks + manual grades + summary."""
+    try:
+        return service.results()
+    except EvaluationError as exc:
+        raise _day24_http_error(exc) from exc
+
+
+@router.put(
+    "/api/week5/day24/evaluation/result/{question_id}",
+    response_model=Day24EvaluationResultsResponse,
+)
+async def day24_evaluation_update_result(
+    question_id: str,
+    payload: Day24EvaluationGradeRecord,
+    service: Day24EvaluationService = Depends(get_day24_evaluation_service),
+) -> Day24EvaluationResultsResponse:
+    """Persist the manual PASS/PARTIAL/FAIL semantic support grade."""
+    try:
+        return service.update_result(question_id, payload)
+    except EvaluationError as exc:
+        raise _day24_http_error(exc) from exc
+
+
+@router.get(
+    "/api/week5/day24/negative/questions",
+    response_model=list[Day24NegativeQuestion],
+)
+async def day24_negative_questions(
+    service: Day24EvaluationService = Depends(get_day24_evaluation_service),
+) -> list[Day24NegativeQuestion]:
+    """Return the realistic questions the knowledge base does NOT cover."""
+    try:
+        return service.negative_questions()
+    except EvaluationError as exc:
+        raise _day24_http_error(exc) from exc
+
+
+@router.post(
+    "/api/week5/day24/negative/run-all",
+    response_model=Day24NegativeRunAllResponse,
+)
+async def day24_negative_run_all(
+    payload: Day23Settings,
+    service: Day24EvaluationService = Depends(get_day24_evaluation_service),
+) -> Day24NegativeRunAllResponse:
+    """Run every negative question and check the deterministic refusal."""
+    try:
+        return await service.run_all_negative(
+            retrieval_top_k=payload.retrieval_top_k,
+            final_top_k=payload.final_top_k,
+            similarity_threshold=payload.similarity_threshold,
+        )
+    except EvaluationError as exc:
+        raise _day24_http_error(exc) from exc
+    except (GenerationError, RagRetrievalError) as exc:
+        raise _day24_http_error(exc) from exc
+
+
+@router.post(
+    "/api/week5/day24/negative/run/{question_id}",
+    response_model=Day24NegativeRunResponse,
+)
+async def day24_negative_run(
+    question_id: str,
+    payload: Day23Settings,
+    service: Day24EvaluationService = Depends(get_day24_evaluation_service),
+) -> Day24NegativeRunResponse:
+    """Run ONE negative question."""
+    try:
+        return await service.run_negative(
+            question_id,
+            retrieval_top_k=payload.retrieval_top_k,
+            final_top_k=payload.final_top_k,
+            similarity_threshold=payload.similarity_threshold,
+        )
+    except EvaluationError as exc:
+        raise _day24_http_error(exc) from exc
+    except (GenerationError, RagRetrievalError) as exc:
+        raise _day24_http_error(exc) from exc
+
+
+@router.get(
+    "/api/week5/day24/negative/report",
+    response_model=Day24NegativeReport,
+)
+async def day24_negative_report(
+    retrieval_top_k: int | None = Query(default=None, ge=1, le=50),
+    final_top_k: int | None = Query(default=None, ge=1, le=20),
+    similarity_threshold: float | None = Query(default=None, ge=0.0, le=1.0),
+    service: Day24EvaluationService = Depends(get_day24_evaluation_service),
+) -> Day24NegativeReport:
+    """Return the anti-hallucination refusal report."""
+    try:
+        return await service.negative_report(
+            retrieval_top_k=retrieval_top_k,
+            final_top_k=final_top_k,
+            similarity_threshold=similarity_threshold,
+        )
+    except EvaluationError as exc:
+        raise _day24_http_error(exc) from exc
+    except (GenerationError, RagRetrievalError) as exc:
+        raise _day24_http_error(exc) from exc
+
+
+# ----------------------------------------------------------------------
+# Day 25 — stateful chat with RAG + task memory
+# ----------------------------------------------------------------------
+def _day25_http_error(exc: Exception) -> HTTPException:
+    """Translate a Day 25 service error into a browser-safe HTTPException."""
+    return HTTPException(status_code=getattr(exc, "status_code", 502), detail=exc.message)
+
+
+@router.get(
+    "/api/week5/day25/status",
+    response_model=Day25StatusResponse,
+)
+async def day25_status(
+    service: Day25ChatService = Depends(get_day25_service),
+) -> Day25StatusResponse:
+    """Expose chat configuration + index stats."""
+    return Day25StatusResponse(**service.status())
+
+
+@router.get(
+    "/api/week5/day25/sessions",
+    response_model=SessionListResponse,
+)
+async def day25_list_sessions(
+    service: Day25ChatService = Depends(get_day25_service),
+) -> SessionListResponse:
+    """List every persistent chat session (newest first)."""
+    return SessionListResponse(sessions=service.list_sessions())
+
+
+@router.post(
+    "/api/week5/day25/sessions",
+    response_model=ChatSession,
+    status_code=201,
+)
+async def day25_create_session(
+    payload: CreateSessionRequest | None = None,
+    service: Day25ChatService = Depends(get_day25_service),
+) -> ChatSession:
+    """Create a new chat session with an empty task state."""
+    return service.create_session(payload)
+
+
+@router.get(
+    "/api/week5/day25/sessions/{session_id}",
+    response_model=SessionDetailResponse,
+)
+async def day25_get_session(
+    session_id: str,
+    service: Day25ChatService = Depends(get_day25_service),
+) -> SessionDetailResponse:
+    """Return messages, persisted evidence and task state for one session."""
+    try:
+        return service.get_detail(session_id)
+    except ChatServiceError as exc:
+        raise _day25_http_error(exc) from exc
+
+
+@router.delete(
+    "/api/week5/day25/sessions/{session_id}",
+    status_code=204,
+)
+async def day25_delete_session(
+    session_id: str,
+    service: Day25ChatService = Depends(get_day25_service),
+) -> None:
+    """Delete a chat session and all of its messages/state/evidence."""
+    try:
+        service.delete_session(session_id)
+    except ChatServiceError as exc:
+        raise _day25_http_error(exc) from exc
+
+
+@router.get(
+    "/api/week5/day25/sessions/{session_id}/state",
+    response_model=TaskStateResponse,
+)
+async def day25_get_state(
+    session_id: str,
+    service: Day25ChatService = Depends(get_day25_service),
+) -> TaskStateResponse:
+    """Return the current structured task state for one session."""
+    try:
+        state = service.get_state(session_id)
+    except ChatServiceError as exc:
+        raise _day25_http_error(exc) from exc
+    return TaskStateResponse(
+        session_id=session_id,
+        state=state,
+        updated_at=service.repository.get_state_updated_at(session_id),
+    )
+
+
+@router.post(
+    "/api/week5/day25/sessions/{session_id}/messages",
+    response_model=SendMessageResponse,
+)
+async def day25_send_message(
+    session_id: str,
+    payload: SendMessageRequest,
+    service: Day25ChatService = Depends(get_day25_service),
+) -> SendMessageResponse:
+    """Run the full Day 25 pipeline for one user message."""
+    try:
+        return await service.send_message(session_id, payload.content)
+    except ChatServiceError as exc:
+        raise _day25_http_error(exc) from exc
+    except (GenerationError, RagRetrievalError) as exc:
+        raise _day25_http_error(exc) from exc
+
+
+@router.get(
+    "/api/week5/day25/evaluation/scenarios",
+    response_model=list[Scenario],
+)
+async def day25_evaluation_scenarios(
+    service: Day25EvaluationService = Depends(get_day25_evaluation_service),
+) -> list[Scenario]:
+    """Return the two reproducible multi-turn scenarios."""
+    try:
+        return service.scenarios()
+    except ScenarioError as exc:
+        raise _day25_http_error(exc) from exc
+
+
+@router.post(
+    "/api/week5/day25/evaluation/run/{scenario_id}",
+    response_model=ScenarioRunResult,
+)
+async def day25_evaluation_run(
+    scenario_id: str,
+    service: Day25EvaluationService = Depends(get_day25_evaluation_service),
+) -> ScenarioRunResult:
+    """Run ONE scenario through the real chat pipeline and report metrics."""
+    try:
+        return await service.run_scenario(scenario_id)
+    except ScenarioError as exc:
+        raise _day25_http_error(exc) from exc
+    except (GenerationError, RagRetrievalError) as exc:
+        raise _day25_http_error(exc) from exc
+
+
+@router.get(
+    "/api/week5/day25/evaluation/results",
+)
+async def day25_evaluation_results(
+    service: Day25EvaluationService = Depends(get_day25_evaluation_service),
+) -> dict:
+    """Return the persisted scenario metrics (real numbers, not edited)."""
+    return service.results()

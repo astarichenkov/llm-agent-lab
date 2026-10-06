@@ -31,11 +31,45 @@ Thumbs.db
 *.log
 logs/
 
-# Persistent Agent context database (Day 7)
-data/
+# Persistent Agent context database (Day 7) and all generated RAG artifacts.
+# ``data/`` is otherwise private/generated; the only tracked exception is the
+# Day 22 control-question dataset (no usernames, phones or Telegram user ids).
+data/*
+!data/day22/
+data/day22/*
+!data/day22/evaluation_questions.json
+# Day 24 negative-question dataset is safe to commit (no usernames, phones or
+# Telegram user ids). Generated results/grades stay private under data/.
+!data/day24/
+data/day24/*
+!data/day24/negative_questions.json
+
+# Day 25 — chat sessions are PRIVATE user conversations. The scenario files
+# contain no private data and are tracked; the chat DB and generated
+# evaluation results must never be committed.
+!data/day25/
+data/day25/*
+!data/day25/scenarios/
+!data/day25/scenarios/*.json
 
 # Internal CA certificates (Day 17) — never commit real CA material
 certs/*.crt
 certs/*.pem
 certs/*.cer
 certs/*.key
+
+# Day 21 — RAG knowledge base.
+# The Telegram export is PRIVATE data and must never be committed. The manual
+# PDFs are large third-party documents and are also kept out of Git.
+docs/xpander/ChatExport/
+docs/xpander/manual/
+# Generated normalized data / embeddings / vector index live under data/,
+# which is already ignored above. This explicit rule documents intent and
+# also covers any temporary atomic-build files.
+data/day21/
+*.building
+*.building-wal
+*.building-shm
+
+# Local archive artifacts (never commit)
+*.zip

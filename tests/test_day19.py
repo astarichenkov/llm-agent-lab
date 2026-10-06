@@ -712,7 +712,7 @@ def test_day19_pipeline_validation(client) -> None:
 # ----------------------------------------------------------------------
 # 13. UI
 # ----------------------------------------------------------------------
-def test_week4_day19_enabled_and_day20_disabled(client) -> None:
+def test_week4_day19_and_day20_enabled(client) -> None:
     import re
 
     html = client.get("/").text
@@ -723,7 +723,7 @@ def test_week4_day19_enabled_and_day20_disabled(client) -> None:
     day19 = re.search(r'<button[^>]*id="tab-day19"[^>]*>', html)
     assert day19 and "disabled" not in day19.group(0)
     day20 = re.search(r'<button[^>]*id="tab-day20"[^>]*>', html)
-    assert day20 and "disabled" in day20.group(0)
+    assert day20 and "disabled" not in day20.group(0)
 
 
 def test_day19_form_and_result_elements(client) -> None:

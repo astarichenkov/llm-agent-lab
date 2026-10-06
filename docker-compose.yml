@@ -27,14 +27,75 @@ services:
       VICTORIA_LOGS_CA_BUNDLE: ${VICTORIA_LOGS_CA_BUNDLE:-}
       # Day 18 — scheduled monitoring SQLite DB (persisted under ./data).
       DAY18_MONITORING_DB_PATH: ${DAY18_MONITORING_DB_PATH:-data/day18/monitoring.db}
+      # Day 19 — MCP tool composition pipeline artifact root.
+      DAY19_ARTIFACT_ROOT: ${DAY19_ARTIFACT_ROOT:-data/day19/runs}
+      # Day 20 — multi-server MCP orchestration (VictoriaLogs + Gitea + Reports).
+      # Gitea access is READ-ONLY; the repository is fixed in configuration.
+      GITEA_BASE_URL: ${GITEA_BASE_URL:-}
+      GITEA_TOKEN: ${GITEA_TOKEN:-}
+      GITEA_REPOSITORY_OWNER: ${GITEA_REPOSITORY_OWNER:-}
+      GITEA_REPOSITORY_NAME: ${GITEA_REPOSITORY_NAME:-}
+      GITEA_DEFAULT_BRANCH: ${GITEA_DEFAULT_BRANCH:-main}
+      GITEA_TIMEOUT_SECONDS: ${GITEA_TIMEOUT_SECONDS:-10}
+      GITEA_MAX_DIFF_CHARS: ${GITEA_MAX_DIFF_CHARS:-15000}
+      GITEA_MAX_COMMITS: ${GITEA_MAX_COMMITS:-20}
+      DAY20_ARTIFACT_ROOT: ${DAY20_ARTIFACT_ROOT:-data/day20/investigations}
+      DAY20_MAX_TOOL_ITERATIONS: ${DAY20_MAX_TOOL_ITERATIONS:-8}
+      DAY20_MAX_TOTAL_TOOL_CALLS: ${DAY20_MAX_TOTAL_TOOL_CALLS:-12}
+      DAY20_TOOL_TIMEOUT_SECONDS: ${DAY20_TOOL_TIMEOUT_SECONDS:-30}
+      # Day 21/22 — local RAG. Ollama runs as a SEPARATE container and is
+      # published on the host, so from inside the app container it is reached
+      # via host.docker.internal — NOT localhost (which would be this app
+      # container itself, causing "Connection refused").
+      RAG_EMBEDDING_PROVIDER: ${RAG_EMBEDDING_PROVIDER:-auto}
+      RAG_EMBEDDING_MODEL: ${RAG_EMBEDDING_MODEL:-bge-m3}
+      RAG_OLLAMA_BASE_URL: ${RAG_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      RAG_OLLAMA_TIMEOUT_SECONDS: ${RAG_OLLAMA_TIMEOUT_SECONDS:-120}
+      RAG_INDEX_PATH: ${RAG_INDEX_PATH:-data/day21/rag_index.sqlite3}
+      RAG_FIXED_INDEX_PATH: ${RAG_FIXED_INDEX_PATH:-data/day21/rag_index_fixed.sqlite3}
+      RAG_GENERATION_PROVIDER: ${RAG_GENERATION_PROVIDER:-deepseek}
+      RAG_GENERATION_MODEL: ${RAG_GENERATION_MODEL:-}
+      RAG_GENERATION_TEMPERATURE: ${RAG_GENERATION_TEMPERATURE:-0.0}
+      RAG_GENERATION_MAX_TOKENS: ${RAG_GENERATION_MAX_TOKENS:-1024}
+      RAG_TOP_K: ${RAG_TOP_K:-5}
+      RAG_CONTEXT_MAX_CHARS: ${RAG_CONTEXT_MAX_CHARS:-12000}
+      RAG_DAY22_EVALUATION_PATH: ${RAG_DAY22_EVALUATION_PATH:-data/day22/evaluation_questions.json}
+      RAG_DAY22_RESULTS_PATH: ${RAG_DAY22_RESULTS_PATH:-data/day22/evaluation_results.json}
+      # Day 21 knowledge base locations (mounted read-only below). Without
+      # these mounts the container cannot serve manual PDFs or map Telegram
+      # quotes to messages.
+      RAG_MANUAL_PATH: ${RAG_MANUAL_PATH:-docs/xpander/manual}
+      RAG_TELEGRAM_EXPORT_PATH: ${RAG_TELEGRAM_EXPORT_PATH:-docs/xpander/ChatExport/result.json}
+      # Day 23 — improved retrieval settings.
+      RAG_RETRIEVAL_TOP_K: ${RAG_RETRIEVAL_TOP_K:-20}
+      RAG_FINAL_TOP_K: ${RAG_FINAL_TOP_K:-5}
+      RAG_SIMILARITY_THRESHOLD: ${RAG_SIMILARITY_THRESHOLD:-0.50}
+      RAG_REWRITE_MAX_TOKENS: ${RAG_REWRITE_MAX_TOKENS:-200}
+      RAG_DAY23_RESULTS_PATH: ${RAG_DAY23_RESULTS_PATH:-data/day23/evaluation_results.json}
+      # Day 24 — grounded RAG + clickable source links.
+      RAG_DAY24_RESULTS_PATH: ${RAG_DAY24_RESULTS_PATH:-data/day24/evaluation_results.json}
+      RAG_DAY24_NEGATIVE_PATH: ${RAG_DAY24_NEGATIVE_PATH:-data/day24/negative_questions.json}
+      # Public Telegram permalink base for clickable source links. Read from
+      # the local (git-ignored) .env via compose interpolation. Empty falls
+      # back to export username / the /c/<id> supergroup form.
+      RAG_TELEGRAM_CHAT_LINK_BASE: ${RAG_TELEGRAM_CHAT_LINK_BASE:-}
     expose:
       - "8000"
+    extra_hosts:
+      # Linux Docker: resolve host.docker.internal to the host gateway so the
+      # app can reach the host-published Ollama. Docker Desktop resolves it
+      # automatically; this makes the setup portable.
+      - "host.docker.internal:host-gateway"
     volumes:
       # Persistent app log (host ./logs -> /app/logs); git-ignored.
       - ./logs:/app/logs
       # Persistent Agent context DB (host ./data -> /app/data); git-ignored.
       # Survives `docker compose restart` AND container recreation.
       - ./data:/app/data
+      # Day 21 knowledge base, mounted READ-ONLY. The Telegram export is
+      # private and never baked into the image; it is only bind-mounted here.
+      - ./docs/xpander/manual:/app/docs/xpander/manual:ro
+      - ./docs/xpander/ChatExport:/app/docs/xpander/ChatExport:ro
       # Internal CA bundle dir (read-only) -> /certs. Defaults to ./certs;
       # override with VICTORIA_LOGS_CA_DIR to mount a host directory.
       - ${VICTORIA_LOGS_CA_DIR:-./certs}:/certs:ro

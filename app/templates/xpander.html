@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0b0e12">
+  <title>Mitsubishi Xpander Assistant</title>
+  <link rel="stylesheet" href="/static/css/xpander.css">
+</head>
+<body class="xp-body">
+
+  <!-- ============================================================= -->
+  <!-- TOP NAV                                                        -->
+  <!-- ============================================================= -->
+  <header class="xp-nav" id="xp-top">
+    <div class="xp-nav__inner">
+      <a class="xp-brand" href="/xpander" aria-label="Mitsubishi Xpander Assistant">
+        <span class="xp-brand__mark" aria-hidden="true">
+          <svg viewBox="0 0 48 48" width="26" height="26">
+            <path d="M24 4 L43 14 L24 44 L5 14 Z" fill="none" stroke="#e60012" stroke-width="3"/>
+            <path d="M24 16 L34 21 L24 36 L14 21 Z" fill="#e60012" opacity="0.85"/>
+          </svg>
+        </span>
+        <span class="xp-brand__text">
+          <strong>Mitsubishi Xpander</strong>
+          <small>Assistant</small>
+        </span>
+      </a>
+
+      <nav class="xp-nav__links" aria-label="Основная навигация">
+        <button type="button" class="xp-nav__link" data-nav="chats">Чаты</button>
+        <button type="button" class="xp-nav__link" data-nav="topics">Популярные темы</button>
+        <button type="button" class="xp-nav__link" data-nav="owners">Опыт владельцев</button>
+        <button type="button" class="xp-nav__link" data-nav="knowledge">База знаний</button>
+      </nav>
+
+      <div class="xp-nav__actions">
+        <label class="xp-search">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/>
+            <path d="M20 20 L16 16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <input type="search" id="xp-search" placeholder="Поиск по чатам" aria-label="Поиск по чатам">
+        </label>
+        <button type="button" class="xp-icon-btn" id="xp-user" aria-label="Профиль">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+            <circle cx="12" cy="8.5" r="3.6" fill="none" stroke="currentColor" stroke-width="2"/>
+            <path d="M4.5 20 C5.5 15.8 8.5 14 12 14 C15.5 14 18.5 15.8 19.5 20"
+                  fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============================================================= -->
+  <!-- HERO                                                           -->
+  <!-- ============================================================= -->
+  <section class="xp-hero" id="xp-hero">
+    <img
+      class="xp-hero__img"
+      alt="Mitsubishi Xpander на горной дороге на закате"
+      src="/static/assets/xpander/xpander_main_banner.png"
+      onerror="this.onerror=null;this.src='/static/assets/xpander/hero-fallback.svg';">
+    <div class="xp-hero__scrim" aria-hidden="true"></div>
+    <div class="xp-hero__content">
+      <span class="xp-hero__eyebrow">Knowledge &amp; Chat Hub</span>
+      <h1>Mitsubishi Xpander Assistant</h1>
+      <p>Чаты, опыт владельцев и база знаний по Xpander</p>
+      <div class="xp-hero__actions">
+        <button type="button" class="xp-btn xp-btn--primary" id="xp-hero-open">Открыть чат</button>
+        <button type="button" class="xp-btn xp-btn--ghost" id="xp-hero-topics">Популярные темы</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================= -->
+  <!-- TOPIC CARDS                                                    -->
+  <!-- ============================================================= -->
+  <section class="xp-section" id="xp-topics">
+    <div class="xp-section__head">
+      <div>
+        <h2>Популярные темы</h2>
+        <p>Начните с готового сценария — ассистент подставит контекст.</p>
+      </div>
+    </div>
+    <div class="xp-topics" id="xp-topic-cards">
+      <button type="button" class="xp-topic-card" data-topic="noise"
+              data-prompt="У меня появилась вибрация Mitsubishi Xpander на D. Что проверить в первую очередь?">
+        <span class="xp-topic-card__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M2 12 H6 L8 6 L12 18 L15 9 L17 12 H22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        <span class="xp-topic-card__body"><strong>Вибрация и шумы</strong><small>Диагностика по симптомам</small></span>
+        <span class="xp-topic-card__arrow" aria-hidden="true">›</span>
+      </button>
+
+      <button type="button" class="xp-topic-card" data-topic="cvt"
+              data-prompt="Какая жидкость ATF и какой объём нужны для вариатора Mitsubishi Xpander?">
+        <span class="xp-topic-card__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 3 V21 M5 8 L19 16 M19 8 L5 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </span>
+        <span class="xp-topic-card__body"><strong>Вариатор и трансмиссия</strong><small>ATF, CVT, регламент</small></span>
+        <span class="xp-topic-card__arrow" aria-hidden="true">›</span>
+      </button>
+
+      <button type="button" class="xp-topic-card" data-topic="maintenance"
+              data-prompt="Какое плановое обслуживание и расходники предусмотрены для Mitsubishi Xpander?">
+        <span class="xp-topic-card__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M14.5 5.5 A4 4 0 0 0 9 11 L4 16 A2 2 0 1 0 8 20 L13 15 A4 4 0 0 0 18.5 9.5 L16 12 L12 8 Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+        </span>
+        <span class="xp-topic-card__body"><strong>Обслуживание</strong><small>ТО, масла, жидкости</small></span>
+        <span class="xp-topic-card__arrow" aria-hidden="true">›</span>
+      </button>
+
+      <button type="button" class="xp-topic-card" data-topic="suspension"
+              data-prompt="Какие стуки и шумы в подвеске Mitsubishi Xpander встречаются и как их проверить?">
+        <span class="xp-topic-card__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M4 12 H8 L10 8 L14 16 L16 12 H20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        <span class="xp-topic-card__body"><strong>Подвеска</strong><small>Стуки, опоры, шины</small></span>
+        <span class="xp-topic-card__arrow" aria-hidden="true">›</span>
+      </button>
+
+      <button type="button" class="xp-topic-card" data-topic="electric"
+              data-prompt="Что делать, если на панели Mitsubishi Xpander появилась ошибка или не работает электрика?">
+        <span class="xp-topic-card__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M13 2 L5 13 H11 L10 22 L19 10 H13 Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+        </span>
+        <span class="xp-topic-card__body"><strong>Электрика</strong><small>Ошибки, предохранители</small></span>
+        <span class="xp-topic-card__arrow" aria-hidden="true">›</span>
+      </button>
+
+      <button type="button" class="xp-topic-card" data-topic="owners"
+              data-prompt="Что владельцы в Telegram рассказывают о типичных проблемах Mitsubishi Xpander?">
+        <span class="xp-topic-card__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M4 5 H16 V14 H8 L4 18 Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M20 9 H18 M20 13 H18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </span>
+        <span class="xp-topic-card__body"><strong>Опыт владельцев</strong><small>Обсуждения сообщества</small></span>
+        <span class="xp-topic-card__arrow" aria-hidden="true">›</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- ============================================================= -->
+  <!-- MAIN 3-COLUMN LAYOUT                                           -->
+  <!-- ============================================================= -->
+  <main class="xp-layout" id="xp-chats">
+
+    <!-- CHAT LIST -->
+    <aside class="xp-panel xp-chatlist" id="xp-chatlist-panel" aria-label="Ваши чаты">
+      <div class="xp-panel__head">
+        <h2>Ваши чаты</h2>
+        <button type="button" class="xp-icon-btn xp-icon-btn--accent" id="xp-new-chat"
+                aria-label="Новый чат" title="Новый чат">+</button>
+      </div>
+      <div class="xp-chatlist__scroll" id="xp-chat-list" aria-live="polite"></div>
+      <button type="button" class="xp-chatlist__close" id="xp-chatlist-close">Закрыть</button>
+    </aside>
+
+    <!-- MAIN CHAT -->
+    <section class="xp-panel xp-chat" aria-label="Диалог">
+      <header class="xp-chat__head">
+        <button type="button" class="xp-icon-btn xp-icon-btn--ghost xp-chat__toggle"
+                id="xp-chat-toggle" aria-label="Список чатов">
+          <svg viewBox="0 0 24 24" width="18" height="18"><path d="M4 6 H20 M4 12 H20 M4 18 H20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+        <span class="xp-chat__thumb" aria-hidden="true">
+          <img id="xp-chat-thumb" alt=""
+               src="/static/assets/xpander/автомобильный_чат_mitsubishi_xpander.png"
+               onerror="this.onerror=null;this.src='/static/assets/xpander/topic-fallback.svg';">
+        </span>
+        <div class="xp-chat__titles">
+          <h2 id="xp-chat-title">Mitsubishi Xpander Assistant</h2>
+          <p id="xp-chat-subtitle">Выберите чат или задайте вопрос</p>
+        </div>
+        <div class="xp-chat__menu" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </div>
+      </header>
+
+      <div class="xp-chat__messages" id="xp-messages" aria-live="polite">
+        <div class="xp-empty" id="xp-empty">
+          <div class="xp-empty__mark" aria-hidden="true">
+            <svg viewBox="0 0 48 48" width="42" height="42">
+              <path d="M24 4 L43 14 L24 44 L5 14 Z" fill="none" stroke="#e60012" stroke-width="2.5"/>
+              <path d="M24 16 L34 21 L24 36 L14 21 Z" fill="#e60012" opacity="0.8"/>
+            </svg>
+          </div>
+          <h3>Чем помочь по вашему Xpander?</h3>
+          <p>Задайте вопрос или выберите популярную тему выше.</p>
+        </div>
+      </div>
+
+      <form class="xp-composer" id="xp-form" novalidate>
+        <button type="button" class="xp-composer__clip" aria-label="Прикрепить файл" title="Прикрепить файл">
+          <svg viewBox="0 0 24 24" width="18" height="18"><path d="M8 12 V7 A4 4 0 0 1 16 7 V16 A3 3 0 0 1 10 16 V8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+        <textarea id="xp-input" rows="1" maxlength="4000"
+                  placeholder="Задайте вопрос об Mitsubishi Xpander..."></textarea>
+        <button type="submit" class="xp-send" id="xp-send" aria-label="Отправить">
+          <svg viewBox="0 0 24 24" width="18" height="18"><path d="M4 12 L20 4 L14 20 L12 13 Z" fill="currentColor"/></svg>
+        </button>
+      </form>
+      <p id="xp-error" class="xp-error hidden" role="alert"></p>
+      <p id="xp-send-loading" class="xp-loading hidden" role="status">Ассистент ищет ответ…</p>
+    </section>
+
+    <!-- CURRENT TOPIC -->
+    <aside class="xp-panel xp-topic" id="xp-topic-panel" aria-label="Текущая тема">
+      <div class="xp-topic__visual">
+        <img id="xp-topic-image" alt="Текущая тема"
+             src="/static/assets/xpander/вибрация_на_d_xpander_у_моря.png"
+             onerror="this.onerror=null;this.src='/static/assets/xpander/topic-fallback.svg';">
+      </div>
+      <div class="xp-topic__body">
+        <span class="xp-topic__eyebrow">Текущая тема</span>
+        <h2 id="xp-topic-title">Mitsubishi Xpander</h2>
+        <p id="xp-topic-vehicle">Обсуждение</p>
+
+        <div class="xp-topic__known" id="xp-topic-known"></div>
+
+        <div class="xp-topic__similar">
+          <h3>Похожие темы</h3>
+          <ul id="xp-topic-similar"></ul>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="xp-footer">
+    <span>Mitsubishi Xpander Assistant</span>
+    <span>Ответы формируются по базе знаний и опыту владельцев</span>
+  </footer>
+
+  <script src="/static/js/xpander.js"></script>
+</body>
+</html>

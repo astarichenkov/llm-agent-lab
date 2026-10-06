@@ -556,6 +556,7 @@ class DeepSeekService:
         max_tokens: int = DEFAULT_MAX_TOKENS,
         stop: str | None = None,
         thinking: bool | None = None,
+        response_format: dict | None = None,
     ) -> tuple[str, str | None, dict | None]:
         """Generic chat completion used by the persistent ``Agent`` layer.
 
@@ -582,6 +583,7 @@ class DeepSeekService:
             temperature=temperature,
             max_tokens=max_tokens,
             stop=stop,
+            response_format=response_format,
             extra_body=extra_body,
         )
         # Safe diagnostic trace for the actual provider call (no secrets, no

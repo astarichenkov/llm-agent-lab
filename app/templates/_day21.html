@@ -1,0 +1,70 @@
+<main class="container" id="panel-day21">
+  <h1>Day 21 — RAG Indexing</h1>
+  <p class="subtitle">
+    Локальный pipeline индексации базы знаний по Mitsubishi Xpander:
+    технические мануалы (PDF) и история Telegram-чата. Day 21 строит
+    <strong>persistent</strong> индекс — генерации ответов LLM ещё нет.
+  </p>
+
+  <section class="preview-panel" aria-labelledby="d21-arch-heading">
+    <h2 id="d21-arch-heading">Pipeline</h2>
+    <pre class="d21-diagram">
+Manual PDF/TXT/MD ─► Loaders ─┐
+                             ▼
+Telegram JSON ──────►  Normalized Documents (Document + Segments)
+                             │
+                 ┌───────────┴───────────┐
+                 ▼                       ▼
+           Fixed Chunking          Structural Chunking
+           (окно + overlap)        (секции / сообщения)
+                 └───────────┬───────────┘
+                             ▼
+                Embeddings (локальный Ollama, bge-m3)
+                             ▼
+                 SQLite Vector Index (persistent)
+    </pre>
+    <p class="field-hint">
+      Код: <code>app/services/rag/</code> — универсальный, не привязанный к
+      Xpander слой (<code>loaders</code>, <code>normalization</code>,
+      <code>chunking</code>, <code>embeddings</code>, <code>index</code>,
+      <code>ingestion</code>).
+    </p>
+  </section>
+
+  <section class="preview-panel" aria-labelledby="d21-cmd-heading">
+    <h2 id="d21-cmd-heading">CLI</h2>
+    <p class="field-hint">
+      Демонстрация Day 21 выполняется через CLI (HTTP API появится позже).
+    </p>
+    <pre class="d21-diagram"># статистика источников
+python -m app.services.rag.cli sources
+
+# построение индекса двумя стратегиями
+python -m app.services.rag.cli index --chunking fixed
+python -m app.services.rag.cli index --chunking structural --rebuild
+
+# статистика индекса и просмотр чанков
+python -m app.services.rag.cli stats
+python -m app.services.rag.cli chunks --source telegram --limit 5
+
+# debug similarity search (без генерации ответа LLM)
+python -m app.services.rag.cli search "давление в шинах" --top-k 5
+    </pre>
+  </section>
+
+  <section class="preview-panel" aria-labelledby="d21-data-heading">
+    <h2 id="d21-data-heading">Index</h2>
+    <ul>
+      <li><strong>Manuals:</strong> 4 PDF, 616 страниц (610 с текстовым слоем).</li>
+      <li><strong>Telegram:</strong> 14 экспортов/чатов, 617 сообщений, 363 пригодны, 254 пропущено (170 дублей между тематическими экспортами, 77 фото без подписи, 6 файлов, 1 poll).</li>
+      <li><strong>Fixed:</strong> chunk_size 1200, overlap 200, 940 чанков, avg 1052.</li>
+      <li><strong>Structural:</strong> max 1800, min 400, 952 чанка, avg 872.</li>
+      <li><strong>Embeddings:</strong> Ollama <code>bge-m3</code>, 1024 измерения.</li>
+      <li><strong>Index:</strong> <code>data/day21/rag_index.sqlite3</code> (structural) и <code>data/day21/rag_index_fixed.sqlite3</code> (fixed).</li>
+    </ul>
+    <p class="field-hint">
+      Полная документация и сравнение стратегий — в
+      <code>docs/week5/day21.md</code>.
+    </p>
+  </section>
+</main>

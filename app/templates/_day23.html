@@ -1,0 +1,112 @@
+<main class="container d22-panel" id="panel-day23">
+  <h1>Mitsubishi Xpander RAG Assistant</h1>
+  <p class="subtitle">Day 23 — Query Rewrite + Relevance Filtering (Baseline vs Improved)</p>
+
+  <div class="d22-tabs" role="tablist" aria-label="Day 23 sections">
+    <button type="button" class="tab-btn active" id="d23-tab-ask" role="tab"
+            aria-selected="true" aria-controls="d23-view-ask">Ask / Compare</button>
+    <button type="button" class="tab-btn" id="d23-tab-eval" role="tab"
+            aria-selected="false" aria-controls="d23-view-eval">Evaluation</button>
+  </div>
+
+  <!-- ================= ASK / COMPARE ================= -->
+  <section id="d23-view-ask" role="tabpanel" aria-labelledby="d23-tab-ask">
+
+    <section class="preview-panel" aria-labelledby="d23-status-heading">
+      <h2 id="d23-status-heading">Configuration</h2>
+      <div class="d22-status" id="d23-status" aria-live="polite">Loading…</div>
+    </section>
+
+    <section class="preview-panel" aria-labelledby="d23-form-heading">
+      <h2 id="d23-form-heading">Question</h2>
+      <div class="field">
+        <label for="d23-question">Вопрос про Mitsubishi Xpander</label>
+        <textarea id="d23-question" rows="3" maxlength="2000">Какая жидкость ATF и какой объём предусмотрены для автоматической коробки передач Xpander?</textarea>
+      </div>
+
+      <div class="d22-controls">
+        <fieldset class="d22-mode" id="d23-mode">
+          <legend>Mode</legend>
+          <label class="d22-radio">
+            <input type="radio" name="d23-mode" id="d23-mode-baseline" value="baseline">
+            <span>Baseline RAG (Day 22)</span>
+          </label>
+          <label class="d22-radio">
+            <input type="radio" name="d23-mode" id="d23-mode-improved" value="improved" checked>
+            <span>Improved RAG (Day 23)</span>
+          </label>
+        </fieldset>
+      </div>
+
+      <fieldset class="d23-settings" id="d23-improved-settings">
+        <legend>Improved settings</legend>
+        <label class="d18-field">
+          <span>Retrieval Top-K</span>
+          <input type="number" id="d23-retrieval-top-k" min="1" max="50" value="20">
+        </label>
+        <label class="d18-field">
+          <span>Similarity Threshold</span>
+          <input type="number" id="d23-similarity-threshold" min="0" max="1" step="0.01" value="0.50">
+        </label>
+        <label class="d18-field">
+          <span>Final Top-K</span>
+          <input type="number" id="d23-final-top-k" min="1" max="20" value="5">
+        </label>
+      </fieldset>
+
+      <div class="actions">
+        <button type="button" class="primary-btn" id="d23-ask">Ask</button>
+        <button type="button" class="primary-btn" id="d23-compare">Compare Baseline vs Improved</button>
+        <span class="loading hidden" id="d23-ask-loading" role="status">Searching knowledge base…</span>
+      </div>
+      <p id="d23-ask-error" class="error hidden" role="alert"></p>
+    </section>
+
+    <section class="preview-panel hidden" id="d23-pipeline-panel" aria-labelledby="d23-pipeline-heading">
+      <h2 id="d23-pipeline-heading">How this answer was generated</h2>
+      <pre class="d22-pipeline" id="d23-pipeline"></pre>
+    </section>
+
+    <section id="d23-results" aria-live="polite"></section>
+  </section>
+
+  <!-- ================= EVALUATION ================= -->
+  <section id="d23-view-eval" class="hidden" role="tabpanel" aria-labelledby="d23-tab-eval">
+    <section class="preview-panel" aria-labelledby="d23-eval-summary-heading">
+      <h2 id="d23-eval-summary-heading">Evaluation summary — Baseline vs Improved</h2>
+      <div class="d22-summary" id="d23-eval-summary" aria-live="polite"></div>
+      <div class="actions">
+        <button type="button" class="primary-btn" id="d23-eval-run-all">Run all 10 questions</button>
+        <button type="button" class="link-btn" id="d23-eval-refresh">Refresh results</button>
+        <button type="button" class="link-btn" id="d23-eval-scores-btn">Threshold score report</button>
+        <span class="loading hidden" id="d23-eval-loading" role="status">Running…</span>
+      </div>
+      <p class="field-hint">
+        PASS/PARTIAL/FAIL для Baseline и Improved ставит пользователь.
+        Expected Source Hit Rate считается автоматически по context, который
+        реально получила LLM. Для вопросов с несколькими expected sources
+        засчитывается только полное покрытие.
+      </p>
+      <p id="d23-eval-error" class="error hidden" role="alert"></p>
+    </section>
+
+    <section class="preview-panel hidden" id="d23-eval-scores-panel" aria-labelledby="d23-scores-heading">
+      <h2 id="d23-scores-heading">Similarity score report (threshold tuning)</h2>
+      <div id="d23-score-report" aria-live="polite"></div>
+    </section>
+
+    <section class="preview-panel" aria-labelledby="d23-eval-table-heading">
+      <h2 id="d23-eval-table-heading">Control questions</h2>
+      <div class="d22-table-wrap">
+        <table class="d22-table">
+          <thead>
+            <tr><th>ID</th><th>Question</th><th>Category</th><th>Expected source</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="d23-eval-table-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="d23-eval-detail" aria-live="polite"></section>
+  </section>
+</main>

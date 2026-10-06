@@ -1,0 +1,84 @@
+<main class="container d22-panel" id="panel-day25">
+  <h1>Mitsubishi Xpander RAG Assistant</h1>
+  <p class="subtitle">
+    Day 25 — Mini Chat with RAG + Task Memory: постоянные чаты, структурированная
+    память задачи и grounded-ответы с проверяемыми источниками.
+  </p>
+
+  <div class="d22-tabs" role="tablist" aria-label="Day 25 sections">
+    <button type="button" class="tab-btn active" id="d25-tab-chat" role="tab"
+            aria-selected="true" aria-controls="d25-view-chat">Chat</button>
+    <button type="button" class="tab-btn" id="d25-tab-eval" role="tab"
+            aria-selected="false" aria-controls="d25-view-eval">Day 25 Evaluation</button>
+  </div>
+
+  <!-- ================= CHAT ================= -->
+  <section id="d25-view-chat" role="tabpanel" aria-labelledby="d25-tab-chat">
+    <section class="preview-panel" aria-labelledby="d25-status-heading">
+      <h2 id="d25-status-heading">Configuration</h2>
+      <div class="d22-status" id="d25-status" aria-live="polite">Loading…</div>
+    </section>
+
+    <div class="d25-layout">
+      <!-- CHAT LIST -->
+      <aside class="d25-sidebar" aria-label="Chat sessions">
+        <div class="actions">
+          <button type="button" class="primary-btn" id="d25-new-chat">+ New Chat</button>
+        </div>
+        <div id="d25-chat-list" class="d25-chat-list" aria-live="polite"></div>
+      </aside>
+
+      <!-- CONVERSATION -->
+      <section class="d25-conversation" aria-label="Conversation">
+        <div id="d25-messages" class="d25-messages" aria-live="polite">
+          <p class="field-hint">
+            Создайте новый чат или выберите существующий слева.
+          </p>
+        </div>
+        <form id="d25-form" class="d25-compose" novalidate>
+          <textarea id="d25-input" rows="3" maxlength="4000"
+                    placeholder="Например: Хочу разобраться, почему машина вибрирует на D."></textarea>
+          <div class="actions">
+            <button type="submit" class="primary-btn" id="d25-send">Send</button>
+            <span class="loading hidden" id="d25-send-loading" role="status">
+              Retrieving, grounding and updating memory…
+            </span>
+          </div>
+          <p id="d25-error" class="error hidden" role="alert"></p>
+        </form>
+      </section>
+
+      <!-- TASK STATE -->
+      <aside class="d25-task-panel" aria-label="Task state">
+        <h2>Task State</h2>
+        <div id="d25-task-state" class="d25-task-state" aria-live="polite">
+          <p class="field-hint">Task state появится после первого сообщения.</p>
+        </div>
+        <details class="d25-tech" id="d25-tech">
+          <summary>Technical details</summary>
+          <div id="d25-tech-body"></div>
+        </details>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ================= EVALUATION ================= -->
+  <section id="d25-view-eval" class="hidden" role="tabpanel"
+           aria-labelledby="d25-tab-eval">
+    <section class="preview-panel" aria-labelledby="d25-eval-heading">
+      <h2 id="d25-eval-heading">Long scenario evaluation</h2>
+      <p class="field-hint">
+        Два reproducible сценария (по 10–15 user-сообщений). Автоматически
+        проверяются task state, corrections, contextual follow-ups, sources и
+        валидность цитат. «Goal retained» — ручная оценка, runner показывает
+        активную цель.
+      </p>
+      <div class="actions">
+        <button type="button" class="link-btn" id="d25-eval-refresh">Refresh</button>
+        <span class="loading hidden" id="d25-eval-loading" role="status">Running…</span>
+      </div>
+      <p id="d25-eval-error" class="error hidden" role="alert"></p>
+    </section>
+    <section id="d25-eval-results" aria-live="polite"></section>
+  </section>
+</main>

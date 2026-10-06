@@ -476,12 +476,12 @@ def test_days_1_to_5_are_hidden_from_navigation(client):
     ).read_text(encoding="utf-8")
     main_tabs = app_js.split("MAIN_TABS =")[1].split(";")[0]
     # Legacy tabs stay switchable in code (so their panels are still hidden),
-    # but the active module is now Week 4 / Day 16.
+    # but the active module is now Week 5 / Day 22.
     for hidden in ("day2", "day3", "day4", "day5"):
         assert f'"{hidden}"' in main_tabs
     assert '"day16"' in main_tabs
-    # default landing tab is the current module (Day 18)
-    assert 'switchMainTab("day18")' in app_js
+    # default landing tab is the current module (Day 22)
+    assert 'switchMainTab("day22")' in app_js
 
 
 def test_days_6_to_10_are_hidden_from_navigation(client):

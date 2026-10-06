@@ -86,6 +86,27 @@ def victorialogs_server_config(
     )
 
 
+def gitea_server_config(
+    env: dict[str, str] | None = None,
+) -> MCPServerConfig:
+    """Launch the Day 20 Gitea MCP server with an explicit env.
+
+    ``GITEA_*`` variables must be forwarded explicitly for the same reason as
+    VictoriaLogs above. The token is only passed to the local subprocess and
+    is never logged by the client.
+    """
+    merged = get_default_environment()
+    if env:
+        merged.update(env)
+    return MCPServerConfig(
+        command=sys.executable,
+        args=["-m", "app.services.mcp.gitea.server"],
+        cwd=str(PROJECT_ROOT),
+        name="Gitea MCP",
+        env=merged,
+    )
+
+
 @dataclass
 class MCPToolCallResult:
     """Normalized outcome of one MCP ``tools/call`` request."""

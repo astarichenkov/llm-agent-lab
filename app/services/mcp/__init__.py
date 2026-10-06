@@ -20,6 +20,7 @@ from app.services.mcp.client import (
     MCPServerConfig,
     MCPToolCallResult,
     default_server_config,
+    gitea_server_config,
     victorialogs_server_config,
 )
 
@@ -28,5 +29,6 @@ __all__ = [
     "MCPServerConfig",
     "MCPToolCallResult",
     "default_server_config",
+    "gitea_server_config",
     "victorialogs_server_config",
 ]

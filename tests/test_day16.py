@@ -176,8 +176,7 @@ def test_week4_navigation_and_day16_panel(client) -> None:
     assert day16_btn and "disabled" not in day16_btn.group(0)
     assert 'id="panel-day16"' in html
     assert 'src="/static/js/day16.js"' in html
-    # Day 17, Day 18 and Day 19 are now implemented and enabled; only
-    # Day 20 stays disabled.
+    # Days 17, 18, 19 and 20 are all implemented and enabled now.
     day17_btn = re.search(r'<button[^>]*id="tab-day17"[^>]*>', html)
     assert day17_btn and "disabled" not in day17_btn.group(0)
     day18_btn = re.search(r'<button[^>]*id="tab-day18"[^>]*>', html)
@@ -186,7 +185,7 @@ def test_week4_navigation_and_day16_panel(client) -> None:
     assert day19_btn and "disabled" not in day19_btn.group(0)
     for day in ("day20",):
         btn = re.search(r'<button[^>]*id="tab-' + day + r'"[^>]*>', html)
-        assert btn and "disabled" in btn.group(0), f"{day} must be disabled"
+        assert btn and "disabled" not in btn.group(0), f"{day} must be enabled"
 
 
 # ----------------------------------------------------------------------

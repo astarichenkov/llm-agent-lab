@@ -25,13 +25,22 @@
     <button type="button" class="tab-btn day-hidden" id="tab-day14" data-tab="day14" aria-selected="false" hidden>День 14 — Инварианты</button>
     <button type="button" class="tab-btn day-hidden" id="tab-day15" data-tab="day15" aria-selected="false" hidden>День 15 — Контроль переходов</button>
 
-    <!-- Current module: Week 4 — MCP -->
-    <span class="week-label" id="week4-label">Week 4 — MCP</span>
-    <button type="button" class="tab-btn" id="tab-day16" data-tab="day16" aria-selected="false">Day 16 — MCP Connection</button>
-    <button type="button" class="tab-btn" id="tab-day17" data-tab="day17" aria-selected="false">Day 17 — VictoriaLogs MCP Tool</button>
-    <button type="button" class="tab-btn" id="tab-day18" data-tab="day18" aria-selected="true">Day 18 — Scheduled Monitoring</button>
-    <button type="button" class="tab-btn" id="tab-day19" data-tab="day19" aria-selected="false">Day 19 — MCP Pipeline</button>
-    <button type="button" class="tab-btn" id="tab-day20" data-tab="day20" disabled aria-disabled="true" title="Not implemented yet">Day 20 — Coming next</button>
+    <!-- Legacy module: Week 4 — MCP stays in the DOM/API for regression,
+         but is removed from the visible navigation (Week 5 is shown now). -->
+    <span class="week-label day-hidden" id="week4-label" hidden>Week 4 — MCP</span>
+    <button type="button" class="tab-btn day-hidden" id="tab-day16" data-tab="day16" aria-selected="false" hidden>Day 16 — MCP Connection</button>
+    <button type="button" class="tab-btn day-hidden" id="tab-day17" data-tab="day17" aria-selected="false" hidden>Day 17 — VictoriaLogs MCP Tool</button>
+    <button type="button" class="tab-btn day-hidden" id="tab-day18" data-tab="day18" aria-selected="false" hidden>Day 18 — Scheduled Monitoring</button>
+    <button type="button" class="tab-btn day-hidden" id="tab-day19" data-tab="day19" aria-selected="false" hidden>Day 19 — MCP Pipeline</button>
+    <button type="button" class="tab-btn day-hidden" id="tab-day20" data-tab="day20" aria-selected="false" hidden>Day 20 — MCP Orchestration</button>
+
+    <!-- Current module: Week 5 — RAG -->
+    <span class="week-label" id="week5-label">Week 5 — RAG</span>
+    <button type="button" class="tab-btn" id="tab-day21" data-tab="day21" aria-selected="false">Day 21 — RAG Indexing</button>
+    <button type="button" class="tab-btn" id="tab-day22" data-tab="day22" aria-selected="true">Day 22 — RAG Assistant</button>
+    <button type="button" class="tab-btn" id="tab-day23" data-tab="day23" aria-selected="false">Day 23 — Improved RAG</button>
+    <button type="button" class="tab-btn" id="tab-day24" data-tab="day24" aria-selected="false">Day 24 — Grounded RAG</button>
+    <button type="button" class="tab-btn" id="tab-day25" data-tab="day25" aria-selected="false">Day 25 — RAG Chat &amp; Memory</button>
   </nav>
 
   <main class="container hidden" id="panel-day2">
@@ -313,6 +322,18 @@
 
   {% include '_day19.html' %}
 
+  {% include '_day20.html' %}
+
+  {% include '_day21.html' %}
+
+  {% include '_day22.html' %}
+
+  {% include '_day23.html' %}
+
+  {% include '_day24.html' %}
+
+  {% include '_day25.html' %}
+
   <script src="/static/js/app.js"></script>
   <script src="/static/js/day3.js"></script>
   <script src="/static/js/day4.js"></script>
@@ -331,5 +352,10 @@
   <script src="/static/js/day17.js"></script>
   <script src="/static/js/day18.js"></script>
   <script src="/static/js/day19.js"></script>
+  <script src="/static/js/day20.js"></script>
+  <script src="/static/js/day22.js"></script>
+  <script src="/static/js/day23.js"></script>
+  <script src="/static/js/day24.js"></script>
+  <script src="/static/js/day25.js"></script>
 </body>
 </html>

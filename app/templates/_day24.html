@@ -1,0 +1,136 @@
+<main class="container d22-panel" id="panel-day24">
+  <h1>Mitsubishi Xpander RAG Assistant</h1>
+  <p class="subtitle">
+    Day 24 — Grounded RAG: источники, проверяемые цитаты и детерминированный
+    отказ при недостатке контекста.
+  </p>
+
+  <div class="d22-tabs" role="tablist" aria-label="Day 24 sections">
+    <button type="button" class="tab-btn active" id="d24-tab-ask" role="tab"
+            aria-selected="true" aria-controls="d24-view-ask">Grounded Ask</button>
+    <button type="button" class="tab-btn" id="d24-tab-eval" role="tab"
+            aria-selected="false" aria-controls="d24-view-eval">Evaluation</button>
+    <button type="button" class="tab-btn" id="d24-tab-negative" role="tab"
+            aria-selected="false" aria-controls="d24-view-negative">Refusal / Anti-hallucination</button>
+  </div>
+
+  <!-- ================= GROUNDED ASK ================= -->
+  <section id="d24-view-ask" role="tabpanel" aria-labelledby="d24-tab-ask">
+
+    <section class="preview-panel" aria-labelledby="d24-status-heading">
+      <h2 id="d24-status-heading">Configuration</h2>
+      <div class="d22-status" id="d24-status" aria-live="polite">Loading…</div>
+    </section>
+
+    <section class="preview-panel" aria-labelledby="d24-form-heading">
+      <h2 id="d24-form-heading">Question</h2>
+      <div class="field">
+        <label for="d24-question">Вопрос про Mitsubishi Xpander</label>
+        <textarea id="d24-question" rows="3" maxlength="2000">Какое давление должно быть в шинах Mitsubishi Xpander размера 205/55R16 при нагрузке 1–5 человек + груз?</textarea>
+      </div>
+
+      <fieldset class="d23-settings" id="d24-settings">
+        <legend>Retrieval / grounding settings</legend>
+        <label class="d18-field">
+          <span>Retrieval Top-K</span>
+          <input type="number" id="d24-retrieval-top-k" min="1" max="50" value="20">
+        </label>
+        <label class="d18-field">
+          <span>Answer / Similarity Threshold</span>
+          <input type="number" id="d24-similarity-threshold" min="0" max="1" step="0.01" value="0.50">
+        </label>
+        <label class="d18-field">
+          <span>Final Top-K</span>
+          <input type="number" id="d24-final-top-k" min="1" max="20" value="5">
+        </label>
+      </fieldset>
+
+      <div class="actions">
+        <button type="button" class="primary-btn" id="d24-ask">Ask grounded</button>
+        <span class="loading hidden" id="d24-ask-loading" role="status">Retrieving and grounding…</span>
+      </div>
+      <p id="d24-ask-error" class="error hidden" role="alert"></p>
+    </section>
+
+    <section class="preview-panel hidden" id="d24-pipeline-panel"
+             aria-labelledby="d24-pipeline-heading">
+      <h2 id="d24-pipeline-heading">How this answer was generated</h2>
+      <pre class="d22-pipeline" id="d24-pipeline"></pre>
+    </section>
+
+    <section id="d24-results" aria-live="polite"></section>
+  </section>
+
+  <!-- ================= EVALUATION ================= -->
+  <section id="d24-view-eval" class="hidden" role="tabpanel"
+           aria-labelledby="d24-tab-eval">
+    <section class="preview-panel" aria-labelledby="d24-eval-summary-heading">
+      <h2 id="d24-eval-summary-heading">Day 24 grounding evaluation</h2>
+      <div class="d22-summary" id="d24-eval-summary" aria-live="polite"></div>
+      <div class="actions">
+        <button type="button" class="primary-btn" id="d24-eval-run-all">Run all 10 questions</button>
+        <button type="button" class="link-btn" id="d24-eval-refresh">Refresh results</button>
+        <span class="loading hidden" id="d24-eval-loading" role="status">Running…</span>
+      </div>
+      <p class="field-hint">
+        Автоматически проверяются наличие sources, наличие quotes и валидность
+        каждой цитаты. «Answer supported by evidence» (PASS/PARTIAL/FAIL)
+        выставляет пользователь.
+      </p>
+      <p id="d24-eval-error" class="error hidden" role="alert"></p>
+    </section>
+
+    <section class="preview-panel" aria-labelledby="d24-eval-table-heading">
+      <h2 id="d24-eval-table-heading">Control questions</h2>
+      <div class="d22-table-wrap">
+        <table class="d22-table">
+          <thead>
+            <tr>
+              <th>ID</th><th>Question</th>
+              <th>Sources</th><th>Quotes</th><th>Quotes valid</th>
+              <th>Answer supported by evidence</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="d24-eval-table-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="d24-eval-detail" aria-live="polite"></section>
+  </section>
+
+  <!-- ================= NEGATIVE / REFUSAL ================= -->
+  <section id="d24-view-negative" class="hidden" role="tabpanel"
+           aria-labelledby="d24-tab-negative">
+    <section class="preview-panel" aria-labelledby="d24-negative-summary-heading">
+      <h2 id="d24-negative-summary-heading">Anti-hallucination metric</h2>
+      <div class="d22-summary" id="d24-negative-summary" aria-live="polite"></div>
+      <div class="actions">
+        <button type="button" class="primary-btn" id="d24-negative-run-all">Run negative questions</button>
+        <button type="button" class="link-btn" id="d24-negative-refresh">Refresh</button>
+        <span class="loading hidden" id="d24-negative-loading" role="status">Running…</span>
+      </div>
+      <p class="field-hint">
+        Реалистичные автомобильные вопросы, ответа на которые нет в базе.
+        Ожидаемый статус — <code>insufficient_context</code>; при слабом
+        контексте generation LLM не вызывается.
+      </p>
+      <p id="d24-negative-error" class="error hidden" role="alert"></p>
+    </section>
+
+    <section class="preview-panel" aria-labelledby="d24-negative-table-heading">
+      <h2 id="d24-negative-table-heading">Negative questions</h2>
+      <div class="d22-table-wrap">
+        <table class="d22-table">
+          <thead>
+            <tr>
+              <th>ID</th><th>Question</th><th>Expected</th><th>Actual</th>
+              <th>LLM called</th><th>Best score</th><th>Result</th>
+            </tr>
+          </thead>
+          <tbody id="d24-negative-table-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </section>
+</main>

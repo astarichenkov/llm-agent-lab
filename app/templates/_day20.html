@@ -1,0 +1,113 @@
+<main class="container day20-panel" id="panel-day20">
+  <h1>Day 20 — MCP Orchestration</h1>
+  <p class="subtitle">
+    Несколько MCP-серверов подключены одновременно:
+    <strong>VictoriaLogs</strong>, <strong>Gitea</strong> и
+    <strong>Reports</strong>. Модель сама выбирает следующий инструмент по
+    результату предыдущего вызова — backend не выполняет захардкоженную
+    цепочку. Gitea доступна только на чтение, репозиторий фиксирован в
+    конфигурации сервера.
+  </p>
+
+  <!-- 1. MCP SERVERS -->
+  <section class="preview-panel" aria-labelledby="d20-servers-heading">
+    <h2 id="d20-servers-heading">MCP Servers</h2>
+    <p class="field-hint">
+      Данные получены backend-ом через реальный MCP <code>tools/list</code>
+      каждого сервера. Список не захардкожен во frontend.
+    </p>
+    <div class="d20-servers" id="d20-servers" aria-live="polite"></div>
+    <div class="actions">
+      <button type="button" class="ghost-btn" id="d20-refresh">Refresh servers</button>
+      <span class="loading hidden" id="d20-loading" role="status">Discovering…</span>
+    </div>
+    <p id="d20-error" class="error hidden" role="alert"></p>
+  </section>
+
+  <!-- 2. TOOL ROUTING -->
+  <section class="preview-panel" aria-labelledby="d20-routing-heading">
+    <h2 id="d20-routing-heading">Tool routing</h2>
+    <p class="field-hint">
+      Mapping <code>tool → MCP server</code> строится из unified registry.
+    </p>
+    <ul class="d20-routing" id="d20-routing" aria-live="polite"></ul>
+  </section>
+
+  <!-- 3. INVESTIGATION FORM -->
+  <section class="preview-panel" aria-labelledby="d20-form-heading">
+    <h2 id="d20-form-heading">Incident investigation</h2>
+    <div class="field">
+      <label for="d20-message">Запрос</label>
+      <textarea id="d20-message" rows="4" maxlength="2000">Проанализируй ERROR application за последний час. Определи, когда начались проблемы, и проверь изменения в Gitea непосредственно перед этим. Подготовь и сохрани итоговый отчёт.</textarea>
+      <p class="field-hint">
+        Repository не вводится вручную — он берётся из env/config сервера.
+      </p>
+    </div>
+    <div class="d18-form-grid">
+      <label class="d18-field">
+        <span>Service hint</span>
+        <input type="text" id="d20-service" maxlength="200" value="application">
+      </label>
+      <label class="d18-field">
+        <span>Log lookback</span>
+        <select id="d20-since">
+          <option value="15">15 min</option>
+          <option value="30">30 min</option>
+          <option value="60" selected>1 hour</option>
+          <option value="180">3 hours</option>
+          <option value="360">6 hours</option>
+        </select>
+      </label>
+      <label class="d20-save-toggle d18-field">
+        <input type="checkbox" id="d20-save" checked>
+        <span>Сохранить отчёт (save_report)</span>
+      </label>
+      <label class="d20-save-toggle d18-field">
+        <input type="checkbox" id="d20-mask">
+        <span>Маскировать данные (URL, названия сервисов, контейнеров и пр.)</span>
+      </label>
+    </div>
+    <div class="actions">
+      <button type="button" class="primary-btn" id="d20-run">Run investigation</button>
+      <span class="loading hidden" id="d20-run-loading" role="status">Investigating…</span>
+    </div>
+    <p id="d20-run-error" class="error hidden" role="alert"></p>
+  </section>
+
+  <!-- 4. FINAL INVESTIGATION -->
+  <section class="preview-panel hidden" id="d20-answer-section" aria-labelledby="d20-answer-heading">
+    <h2 id="d20-answer-heading">Final investigation</h2>
+    <div class="d18-summary-grid">
+      <div class="d18-summary-item"><span>Status</span><b id="d20-status">—</b></div>
+      <div class="d18-summary-item"><span>Investigation</span><b id="d20-id">—</b></div>
+      <div class="d18-summary-item"><span>Iterations</span><b id="d20-iterations">0</b></div>
+      <div class="d18-summary-item"><span>Tool calls</span><b id="d20-toolcalls">0</b></div>
+    </div>
+    <div class="d17-answer" id="d20-answer"></div>
+  </section>
+
+  <!-- 5. ORCHESTRATION TRACE -->
+  <section class="preview-panel hidden" id="d20-trace-section" aria-labelledby="d20-trace-heading">
+    <h2 id="d20-trace-heading">Orchestration trace</h2>
+    <p class="field-hint">
+      Порядок вызовов определила модель по результатам предыдущих шагов.
+      Показаны только operational причины, а не скрытые рассуждения модели.
+    </p>
+    <ol class="d20-trace" id="d20-trace" aria-live="polite"></ol>
+  </section>
+
+  <!-- 6. SAVED REPORT -->
+  <section class="preview-panel hidden" id="d20-artifacts-section" aria-labelledby="d20-artifacts-heading">
+    <h2 id="d20-artifacts-heading">Saved report</h2>
+    <ul class="d19-artifacts" id="d20-artifacts"></ul>
+    <p class="field-hint">
+      Доступны только известные файлы расследования внутри
+      <code>data/day20/investigations/</code>.
+    </p>
+    <div class="actions">
+      <button type="button" class="ghost-btn" id="d20-preview-investigation">Preview investigation.md</button>
+      <button type="button" class="ghost-btn" id="d20-preview-metadata">Preview metadata.json</button>
+    </div>
+    <pre class="d16-tool-schema hidden" id="d20-artifact-preview">—</pre>
+  </section>
+</main>
